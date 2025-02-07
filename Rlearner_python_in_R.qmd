@@ -1,0 +1,688 @@
+---
+title: "Rlearner_in_R"
+format: html
+editor: visual
+echo: false
+---
+
+## Set up
+
+```{r setup, include=FALSE}
+
+# libraries
+library(knitr)
+library(readr)
+library(torch)
+library(reshape2)
+library(dplyr)
+library(GGally)
+library(ggplot2)
+library(purrr)
+
+# directory 
+knitr::opts_knit$set(root.dir = "/Users/monamousavi/Dropbox/Causal_climate/My_own_Shared/Takashi_code/Write_python_in_R/Data")
+
+# no warnings in the output
+options(warn=-1)
+```
+
+# Rann_regression_20230413 copy_d2
+
+## Import data
+
+```{r}
+# Import data
+
+# setwd("/Users/monamousavi/Dropbox/Causal_climate/My_own_Shared/Takashi_code/Write_python_in_R/Data")
+data_2nd_stage <- read_csv("./DG2_ss.csv")
+evall_N_seq <- read_csv("./DG2_eval_data.csv")
+
+```
+
+```{r}
+
+plot_loss <- function(history) {
+  loss <- as_array(history$loss)
+  val_loss <- as_array(history$val_loss)
+
+  # data frame
+  loss_data <- data.frame(
+    epoch = seq_along(loss),
+    loss = loss,
+    val_loss = val_loss
+  )
+ 
+  
+  loss_data_long <- melt(loss_data, id.vars = "epoch")
+
+
+  ggplot(loss_data_long, aes(x = epoch, y = value, color = variable)) +
+    geom_line(size = 1) +
+    labs(x = "Epoch", y = "MAE", color = "Loss Type") +
+    theme_minimal() +
+    theme(legend.position = "top") +
+    geom_point()
+}
+
+```
+
+# Multiple input DNN
+
+```{r}
+
+
+dataset <- data_2nd_stage %>%
+  select(y_tilde, x1, x2, T_1_tilde, T_2_tilde, T_3_tilde)
+
+# Split data into train (80%) and test (20%)
+
+train_indices <- sample(1:nrow(dataset), size = 0.8 * nrow(dataset))  
+train_dataset <- dataset[train_indices, ] 
+test_dataset <- dataset[-train_indices, ] 
+
+# Convert data to torch tensors
+train_tensor <- torch_tensor(as.matrix(train_dataset))
+test_tensor <- torch_tensor(as.matrix(test_dataset))
+
+```
+
+```{r}
+
+# Pair plot 
+ggpairs(train_dataset, diag = list(continuous = "density")) +
+  theme_minimal()
+
+```
+
+```{r}
+
+# features
+train_features_tensor <- train_tensor[, 2:6, drop = FALSE]
+test_features_tensor <- test_tensor[, 2:6, drop = FALSE]
+
+# labels
+train_labels_tensor <- train_tensor[, 1, drop = FALSE]   # First column (y_tilde) 
+test_labels_tensor <- test_tensor[, 1, drop = FALSE]   # First column (y_tilde) 
+
+# compute mean and Std (from train data) for standardization
+train_means <- torch_mean(train_features_tensor, dim = 1)
+train_sds <- torch_std(train_features_tensor, dim = 1, unbiased = TRUE)
+
+# standardize features (use training stats for both train and test data)
+scaled_train_features_tensor <- (train_features_tensor - train_means) / train_sds
+scaled_test_features_tensor <- (test_features_tensor - train_means) / train_sds  
+
+```
+
+```{r}
+
+
+#  R torch neural network model
+RModel <- nn_module(
+  initialize = function() {
+  
+    self$dense1_x <- nn_linear(2, 64)
+    self$dense2_x <- nn_linear(64, 64)
+    self$dense3_x <- nn_linear(64, 1)
+    
+    self$dense1_T <- nn_linear(2, 64)
+    self$dense2_T <- nn_linear(64, 64)
+    self$dense3_T <- nn_linear(64, 1)
+    
+    self$dense1_T3 <- nn_linear(2, 64)
+    self$dense2_T3 <- nn_linear(64, 64)
+    self$dense3_T3 <- nn_linear(64, 1)
+  },
+  
+  forward = function(input) {
+   
+    x <- input[, 1:2]   # First two columns
+    T <- input[, 3:5]   # Last three columns
+    
+    T1 <- T[, 1, drop=FALSE]   # First column
+    T2 <- T[, 2, drop=FALSE]   # Second column
+    T3 <- T[, 3, drop=FALSE]   # Third column
+    
+    # Pass x to dense layers
+    dense1 <- x %>%
+      self$dense1_x() %>%
+      nnf_relu() %>%
+      self$dense2_x() %>%
+      nnf_relu() %>%
+      self$dense3_x()
+    
+    dense1 <- dense1 * T1  
+    
+    dense2 <- x %>%
+      self$dense1_T() %>%
+      nnf_relu() %>%
+      self$dense2_T() %>%
+      nnf_relu() %>%
+      self$dense3_T()
+    
+    dense2 <- dense2 * T2  
+    
+    dense3 <- x %>%
+      self$dense1_T3() %>%
+      nnf_relu() %>%
+      self$dense2_T3() %>%
+      nnf_relu() %>%
+      self$dense3_T3()
+    
+    dense3 <- dense3 * T3  
+    
+    # Sum the outputs
+    output <- dense1 + dense2 + dense3
+    return(output)
+  }
+)
+
+# model 
+model <- RModel()
+
+# optimizer and loss function
+optimizer <- optim_adam(model$parameters, lr = 0.001)
+loss_fn <- nnf_l1_loss  # MAE (Mean Absolute Error)
+
+print(model)
+
+```
+
+```{r}
+
+# Hyperparameters
+epochs <- 500
+batch_size <- 128
+patience <- 10  # early stopping 
+min_delta <- 0.0  # minimum improvement 
+
+# Optimizer & loss function
+optimizer <- optim_adam(model$parameters, lr = 0.001)
+loss_fn <- nnf_l1_loss  # MAE
+
+
+train_dataset <- tensor_dataset(scaled_train_features_tensor, train_labels_tensor)
+test_dataset <- tensor_dataset(scaled_test_features_tensor, test_labels_tensor)
+
+train_dataloader <- dataloader(train_dataset, batch_size = batch_size, shuffle = TRUE)
+test_dataloader <- dataloader(test_dataset, batch_size = batch_size, shuffle = FALSE)
+
+# early stopping parameters
+best_val_loss <- Inf
+epochs_without_improvement <- 0
+
+# history list
+history <- list(train_loss = c(), val_loss = c())
+
+# training Loop
+for (epoch in 1:epochs) {
+  model$train()
+  train_loss <- 0
+  
+  coro::loop(for (batch in train_dataloader) {
+    optimizer$zero_grad()
+    
+    inputs <- batch[[1]]
+    targets <- batch[[2]]
+    
+    outputs <- model(inputs)
+    loss <- loss_fn(outputs, targets)
+    
+    loss$backward()
+    optimizer$step()
+    
+    train_loss <- train_loss + loss$item()
+  })
+  
+  # average training loss
+  train_loss <- train_loss / length(train_dataloader)
+  
+  # validation
+  model$eval()
+  val_loss <- 0
+  
+  coro::loop(for (batch in test_dataloader) {
+    inputs <- batch[[1]]
+    targets <- batch[[2]]
+    
+    outputs <- model(inputs)
+    loss <- loss_fn(outputs, targets)
+    
+    val_loss <- val_loss + loss$item()
+  })
+  
+  # average validation loss
+  val_loss <- val_loss / length(test_dataloader)
+  
+ 
+  history$train_loss <- c(history$train_loss, train_loss)
+  history$val_loss <- c(history$val_loss, val_loss)
+  
+  
+  cat(sprintf("Epoch %d: Train Loss = %.4f | Val Loss = %.4f\n", epoch, train_loss, val_loss))
+  
+
+  if (val_loss < best_val_loss - min_delta) {
+    best_val_loss <- val_loss
+    epochs_without_improvement <- 0  # Reset counter
+  } else {
+    epochs_without_improvement <- epochs_without_improvement + 1
+  }
+  
+  if (epochs_without_improvement >= patience) {
+    cat("Early stopping triggered. Training stopped.\n")
+    break
+  }
+}
+```
+
+```{r}
+
+library(ggplot2)
+library(tidyr)
+
+plot_loss <- function(history) {
+  # Convert history list to a data frame
+  df <- data.frame(
+    epoch = seq_along(history$train_loss),
+    train_loss = history$train_loss,
+    val_loss = history$val_loss
+  ) %>%
+    pivot_longer(cols = c(train_loss, val_loss), 
+                 names_to = "Loss_Type", 
+                 values_to = "Loss")
+  
+ 
+  ggplot(df, aes(x = epoch, y = Loss, color = Loss_Type)) +
+    geom_line(linewidth = 1) +  # ✅ Fix applied
+    geom_point() +
+    labs(x = "Epoch", y = "Mean Absolute Error (MAE)", color = "Loss Type") +
+    theme_minimal() +
+    theme(legend.position = "top") +
+    ggtitle("Training and Validation Loss")
+}
+
+
+plot_loss(history)
+
+```
+
+```{r}
+# predictions (on test set)
+model$eval()  
+test_predictions_tensor <- model(scaled_test_features_tensor)  
+test_predictions <- as_array(test_predictions_tensor)  # convert tensor to numeric vector
+test_labels_vec <- as_array(test_labels_tensor)  # convert true labels to numeric vector
+
+df <- data.frame(
+  True_Values = test_labels_vec,
+  Predictions = test_predictions
+)
+
+ggplot(df, aes(x = True_Values, y = Predictions)) +
+  geom_point(color = "blue", alpha = 0.6) +  
+  labs(x = "True Values", y = "Predictions", title = "model predictions vs true values") +
+  theme_minimal() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")  
+```
+
+```{r}
+
+# predict using the entire data
+
+features <- dataset  
+labels <- features$y_tilde  
+features$y_tilde <- NULL  
+
+#  standardize features (use the same mean and std as training)
+scaled_features <- scale(features, center = train_means, scale = train_sds)
+
+# convert to torch tensor
+scaled_features_tensor <- torch_tensor(as.matrix(scaled_features))
+labels_tensor <- torch_tensor(as.numeric(labels))  
+
+#  Predictions
+model$eval()  
+predictions_tensor <- model(scaled_features_tensor)  
+predictions <- as_array(predictions_tensor)  
+true_values <- as_array(labels_tensor) 
+
+
+df <- data.frame(
+  True_Values = true_values,
+  Predictions = predictions
+)
+
+
+ggplot(df, aes(x = True_Values, y = Predictions)) +
+  geom_point(color = "blue", alpha = 0.6) +  # Scatter plot
+  labs(x = "True Values", y = "Predictions", title = "model predictions vs true values") +
+  theme_minimal() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red")  
+
+```
+
+```{r}
+# loops over rows (repeats the row 100 times)
+
+test_dataset <- data_2nd_stage
+features <- test_dataset %>% select(x1, x2)
+Tseq <- evall_N_seq$T  
+
+RMSE_vector <- c()
+
+# iterate over 6 rows (like `for i in tqdm([0,1,2,3,4,5])` in takashi's)
+walk(1:6, function(i) {
+  feature_1 <- features[i, ]  
+
+  rep_feature_1 <- feature_1[rep(1, 100), ]  # repeat row
+  rep_feature_1 <- cbind(rep_feature_1, evall_N_seq[, 1:3])  # T_1 and T_2 and T_3
+  colnames(rep_feature_1) <- c("x1", "x2", "T_1_tilde", "T_2_tilde", "T_3_tilde")  # Rename columns
+
+  # standardize features using the training mean and std
+  scaled_feature_1 <- scale(rep_feature_1, center = train_means, scale = train_sds)
+  scaled_feature_1_tensor <- torch_tensor(as.matrix(scaled_feature_1))  # Convert to tensor
+
+  #  model predictions
+  model$eval()  
+  prediction_tensor <- model(scaled_feature_1_tensor)  
+  prediction <- as_array(prediction_tensor)  # convert tensor to numeric vector
+
+  # true_Y_tilde
+  true_Y_tilde <- (feature_1$x1 + feature_1$x2^2) * log(Tseq)  # formula
+
+  # predictions vs true values
+  df <- data.frame(Tseq = Tseq, Prediction = prediction, True_Y = true_Y_tilde)
+  
+  p <- ggplot(df, aes(x = Tseq)) +
+    geom_line(aes(y = Prediction, color = "Prediction")) +
+    geom_line(aes(y = True_Y, color = "True_Y"), linetype = "dashed") +
+    labs(x = "T", y = "Y_tilde", title = paste("Row", i, "Prediction vs True")) +
+    theme_minimal() +
+    scale_color_manual(values = c("Prediction" = "blue", "True_Y" = "black"))
+
+   print(p)
+  # compute RMSE
+  MSE <- mean((true_Y_tilde - mean(true_Y_tilde) - (prediction - mean(prediction)))^2)
+  RMSE <- sqrt(MSE)
+  RMSE_vector <<- c(RMSE_vector, RMSE)  
+})
+
+print(RMSE_vector) # for 6 rows
+```
+
+# Rann_regression_MultiSimulation_train5field_20230504
+
+## Import data
+
+```{r}
+
+data_2nd_stage <- readRDS("./data_20230504/data_2nd_stage.rds")
+evall_N_seq = readRDS("./data_20230504/evall_N_seq.rds")
+df_train_sim_id <- read_csv("./Output_ann_Train_5field/df_train_sim_id.csv")
+```
+
+```{r}
+
+sim_id_train <- unlist(df_train_sim_id[2, ])   # row 1 in python is row 2 in R
+sim_id_train <- sim_id_train[-1]  
+
+# convert to torch tensor and move to GPU (MPS)
+sim_id_train_tensor <- torch_tensor(sim_id_train, device = torch_device("mps"))
+
+# check it's on GPU
+print(sim_id_train_tensor)
+
+```
+
+# check if GPU is working
+
+```{r}
+# check if GPU is working 
+
+
+mps_is_available <- function() {
+  tryCatch({
+    tmp <- torch_tensor(1, device = torch_device("mps"))
+    TRUE
+  }, error = function(e) {
+    FALSE
+  })
+}
+
+# --- Select device: CUDA > MPS > CPU ---
+if (cuda_is_available()) {
+  device <- torch_device("cuda")
+} else if (mps_is_available()) {
+  device <- torch_device("mps")
+} else {
+  device <- torch_device("cpu")
+}
+cat("Using device:", device$type, "\n")
+```
+
+# Multiple input DNN
+
+```{r}
+
+
+# loop for each simulation 
+sim_ids <- unique(data_2nd_stage$sim)
+num <- length(sim_ids)
+
+for (j in seq_len(num)) {
+  
+  sim_ids_ <- sim_ids[-j]
+  
+  
+  sim_id_train <- as.numeric(df_train_sim_id[2, ])
+  sim_id_train <- sim_id_train[-1]  # remove first element
+  train_sim_ids <- sim_id_train[1:2]
+  
+  sim_id_test <- sim_ids[j]
+  cat("Processing sim_id_test =", sim_id_test, "\n")
+  
+ 
+  dataset <- data_2nd_stage %>%
+    filter(sim %in% train_sim_ids) %>%
+    select(y_tilde, Nk, plateau, b0, T_1_tilde, T_2_tilde, T_3_tilde)
+  
+  n <- nrow(dataset)
+  train_idx <- sample(seq_len(n), size = floor(0.8 * n))
+  train_dataset <- dataset[train_idx, ]
+  val_dataset   <- dataset[-train_idx, ]
+  
+
+  train_labels <- train_dataset$y_tilde
+  train_features <- train_dataset %>% select(-y_tilde)
+  val_labels <- val_dataset$y_tilde
+  val_features <- val_dataset %>% select(-y_tilde)
+  
+  # standardize 
+
+  col_means <- sapply(train_features, mean)
+  col_sds   <- sapply(train_features, sd)
+  
+  scale_data <- function(df) {
+    as.data.frame(scale(df, center = col_means, scale = col_sds))
+  }
+  
+  scaled_train_features <- scale_data(train_features)
+  scaled_val_features   <- scale_data(val_features)
+  
+  # convert data to torch tensors ---
+  x_train <- torch_tensor(as.matrix(scaled_train_features), dtype = torch_float(), device = device)
+  y_train <- torch_tensor(matrix(train_labels, ncol = 1), dtype = torch_float(), device = device)
+  x_val   <- torch_tensor(as.matrix(scaled_val_features), dtype = torch_float(), device = device)
+  y_val   <- torch_tensor(matrix(val_labels, ncol = 1), dtype = torch_float(), device = device)
+  
+  
+  #  neural network model 
+  Net <- nn_module(
+    "Net",
+    initialize = function() {
+      # Branch 1
+      self$branch1_fc1 <- nn_linear(3, 64)
+      self$branch1_fc2 <- nn_linear(64, 64)
+      self$branch1_fc3 <- nn_linear(64, 1)
+      # Branch 2
+      self$branch2_fc1 <- nn_linear(3, 64)
+      self$branch2_fc2 <- nn_linear(64, 64)
+      self$branch2_fc3 <- nn_linear(64, 1)
+      # Branch 3
+      self$branch3_fc1 <- nn_linear(3, 64)
+      self$branch3_fc2 <- nn_linear(64, 64)
+      self$branch3_fc3 <- nn_linear(64, 1)
+    },
+    forward = function(x) {
+      x_main <- x[ , 1:3]
+      T <- x[ , 4:6]
+      
+      # Branch 1
+      b1 <- self$branch1_fc1(x_main) %>% nnf_relu()
+      b1 <- self$branch1_fc2(b1) %>% nnf_relu()
+      b1 <- self$branch1_fc3(b1)
+      b1 <- b1 * T[ , 1, drop = FALSE]
+      
+      # Branch 2
+      b2 <- self$branch2_fc1(x_main) %>% nnf_relu()
+      b2 <- self$branch2_fc2(b2) %>% nnf_relu()
+      b2 <- self$branch2_fc3(b2)
+      b2 <- b2 * T[ , 2, drop = FALSE]
+      
+      # Branch 3
+      b3 <- self$branch3_fc1(x_main) %>% nnf_relu()
+      b3 <- self$branch3_fc2(b3) %>% nnf_relu()
+      b3 <- self$branch3_fc3(b3)
+      b3 <- b3 * T[ , 3, drop = FALSE]
+      
+      out <- b1 + b2 + b3
+      out
+    }
+  )
+  
+  model <- Net()$to(device = device)
+  
+ 
+  optimizer <- optim_adam(model$parameters, lr = 0.001)
+  
+  # training loop 
+  epochs <- 50     #500
+  batch_size <- 512  
+  patience <- 10
+  best_val_loss <- Inf
+  epochs_no_improve <- 0
+  
+  # when running the following code, I get this Warning:
+  ### [W MPSFallback.mm:11] Warning: The operator 'aten::sgn.out' is not currently supported on the MPS backend and will fall back to run on the CPU. This may have performance implications. (function operator())
+  
+  
+  
+  
+  for (epoch in 1:epochs) {
+    model$train()
+    optimizer$zero_grad()
+    
+
+    output <- model(x_train)
+    loss <- nnf_l1_loss(output, y_train)
+    
+
+    loss$backward()
+    optimizer$step()
+    
+  
+    model$eval()
+    with_no_grad({
+      val_output <- model(x_val)
+      val_loss <- nnf_l1_loss(val_output, y_val)$item()
+    })
+    
+    # early stopping 
+    if (val_loss < best_val_loss - 1e-6) {
+      best_val_loss <- val_loss
+      epochs_no_improve <- 0
+    } else {
+      epochs_no_improve <- epochs_no_improve + 1
+    }
+    
+    if (epochs_no_improve >= patience) {
+      cat("Early stopping at epoch", epoch, "\n")
+      break
+    }
+  }
+  
+  ####$$%^^&&&***  End of where I get warning
+  
+  
+  
+  # predictions on val set 
+  model$eval()
+  with_no_grad({
+    val_preds <- model(x_val)$to(device = "cpu")$numpy()
+  })
+  val_preds <- as.vector(val_preds)
+  
+  outcome_val <- data.frame(pred = val_preds, true = val_labels)
+  outfile_val <- sprintf("./Output_Rann_Train_5field/validation_%s.csv", sim_id_test)
+  write.csv(outcome_val, outfile_val, row.names = FALSE)
+  
+  
+  # === EONR Estimation ===
+ 
+  p_corn <- 6.25 / 25.4   
+  p_N    <- 1 / 0.453592   
+  
+
+  test_dataset <- data_2nd_stage %>% filter(sim == sim_id_test)
+
+  test_features <- test_dataset %>% select(Nk, plateau, b0)
+  
+ 
+  test_evall_N_seq <- evall_N_seq %>%
+    filter(sim == sim_id_test) %>%
+    arrange(N)
+  Nseq <- test_evall_N_seq$N
+  n_row <- nrow(test_dataset)
+  
+  estEONR_vector <- numeric(n_row)
+  
+  # for each row (field) in the test data
+  for (i in 1:n_row) {
+ 
+    feature_1 <- test_features[i, , drop = FALSE]
+    # repeat the row 100 times
+    rep_feature_1 <- feature_1[rep(1, 100), ]
+    
+  
+    temp <- test_evall_N_seq %>% select(T_1, T_2, T_3)
+    names(temp) <- c("T_1_tilde", "T_2_tilde", "T_3_tilde")
+    rep_feature_1 <- cbind(rep_feature_1, temp)
+    
+   
+    rep_feature_1_scaled <- as.data.frame(mapply(function(col, mean_val, sd_val) {
+      (col - mean_val) / sd_val
+    }, rep_feature_1, col_means, col_sds, SIMPLIFY = FALSE))
+    
+    # convert the scaled data to a torch tensor.
+    rep_feature_tensor <- torch_tensor(as.matrix(rep_feature_1_scaled), dtype = torch_float(), device = device)
+    
+    model$eval()
+    with_no_grad({
+      prediction <- model(rep_feature_tensor)$to(device = "cpu")$numpy()
+    })
+    prediction <- as.vector(prediction)
+    
+    MP <- prediction * p_corn - Nseq * p_N
+    #  N value that maximizes MP
+    estEONR <- Nseq[which.max(MP)]
+    estEONR_vector[i] <- estEONR
+  }
+  
+  outcome <- data.frame(pred = estEONR_vector, true = test_dataset$opt_N)
+  outfile_eonr <- sprintf("./Output_Rann_Train_5field/EONR_%s.csv", sim_id_test)
+  write.csv(outcome, outfile_eonr, row.names = FALSE)
+  
+} 
+
+```
