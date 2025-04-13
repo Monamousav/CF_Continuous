@@ -1,0 +1,17 @@
+name: pytorchenv
+channels:
+  - defaults
+  - pytorch
+dependencies:
+  - numpy=1.26.4
+  - pandas=2.2.3
+  - matplotlib=3.10.0
+  - pillow=11.1.0
+  - pip=25.0
+  - plotly=5.24.1
+  - scikit-learn=1.6.1
+  - seaborn=0.13.2
+  - python=3.12.9
+  - jupyter=1.1.1
+  - pytorch=2.3.1
+  - torchvision=0.18.1
