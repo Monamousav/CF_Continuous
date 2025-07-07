@@ -1,0 +1,102 @@
+
+# Introduction
+
+
+# Materials and Method
+
+## Data generation
+
+
+## Models and estimation procedures
+
+We employ three modeling approaches to estimate the yield response function to nitrogen application rates and to determine the site-specific optimal nitrogen rate. First, we implement artificial neural networks (ANNs) using two variations of the R-learner framework. In the first variation (RANN), both the outcome variable (yield) and the treatment variable (nitrogen rate) are orthogonalized. In the second variation, only the outcome variable is orthogonalized (half_RANN). Next, we apply an S-learner ANN, in which yield is modeled as a function of the nitrogen rate and a set of observed covariates (X), without orthogonalization. In addition to these ANN-based methods, we also use a causal forest (CF), implemented as a double machine learning approach following the R-learner framework. Finally, we include a random forest (RF) model using the R-learner approach with orthogonalization of the outcome variable only (half-RRF).
+
+The econometric model to estimate the R-learner CF is as following:
+
+$$
+Y=\sum_{k=1}^K \theta_k(X) \cdot S_k(N)+g(X)+v
+$$
+where $Y$ is corn yield, $N$ is nitrogen rate (treatment variable), and $X$ is a collection of observed variables, $\alpha, \beta$, and $\gamma$. In this equation, $g(X)$ is the nuisance function.
+Here the treatment variable (nitrogen rate) is split into $K$ basis variables. Then, each of the basis variables are orthogonalized by cross-fitting using $X$ as covariates via boosted regression forest. Let the treatment basis variables be denoted as $S_k \tilde{(T)}$ for $k=1, \ldots, K$. Then, the second stage solves the following problem using the CF algorithm: 
+
+$$
+\operatorname{Min} \sum_{i=1}^N\left[{Y}_i-\sum_{k=1}^K \theta_k\left(X_i\right) \tilde{S}_k\left(N_i\right)\right]
+$$
+
+Once $\theta_k\left(X_i\right)$ are estimated, then the conditional treatment effect of moving from one rate $\left(N_0\right)$ to another $\left(N_1\right)$ for observation $i$ can be obtained by $\sum_{k=1}^K \theta_k(X) \tilde{S}_k\left(N_1\right)-\sum_{k=1}^K \theta_k(X) \tilde{S}_k\left(N_0\right)$.
+
+Profit impact of moving from $N_0$ to $N_1$ is 
+
+$$
+P_{\text {corn }} \sum_{k=1}^K \theta_k(X) \tilde{S}_k\left(N_1\right)-P_{\text {corn }} \sum_{k=1}^K \theta_k(X) \tilde{S}_k\left(N_0\right)-P_N\left(N_1-N_0\right)
+$$
+
+A grid search over a sequence of $N$ values is used to identify the profit-maximizing N rate.
+
+
+The S-learner ANN approach estimates the following model non-parametrically without imposing any functional forms on the relationships between the variables.
+
+$$
+Y=f(X, N)+v
+$$
+Once $f(X, N)$ is estimated (denote it as $\hat{f}(X, N)$ ), then the conditional treatment effect of moving from one rate ( $N_0$ ) to another ( $N_1$ ) can be obtained by $\hat{f}\left(X, N_1\right)-\hat{f}\left(X, N_0\right)$. The associated change in profit is $P_{\text {corn }} \hat{f}\left(X, N_1\right)-P_{\text {corn }} \hat{f}\left(X, N_0\right)-P_N\left(N_1-N_0\right)$. Similar to the CF approach, a grid search is used to identify numerically the optimal nitrogen rate.
+
+
+The R-learner ANN (RANN) approach estimates the site-specific nitrogen response function by first orthogonalizing the outcome variable and then modeling the residuals using a neural network. Specifically, the outcome residual $y_i-\hat{g}\left(X_i\right)$ is regressed on orthogonalized treatment basis variables $\tilde{T}_1, \tilde{T}_2, \tilde{T}_3$, interacted with covariates $X$, using a structured artificial neural network.
+The model architecture includes three separate branches, each corresponding to one of the orthogonalized basis variables for the nitrogen rate. Each branch processes the covariates $X$ and multiplies the output by one of the treatment basis variables. The final yield prediction is the sum of the outputs from all three branches:
+
+$$
+\hat{Y}_i=f_1\left(X_i\right) \cdot \tilde{T}_{1 i}+f_2\left(X_i\right) \cdot \tilde{T}_{2 i}+f_3\left(X_i\right) \cdot \tilde{T}_{3 i}
+$$
+where $f_k(\cdot)$ are the outputs from each neural network branch, and $\tilde{T}_{k i}$ are the orthogonalized treatment basis variables for observation $i$. These basis variables are obtained by cross-fitting regression forests of each treatment basis on $X$, removing the component of the treatment that is predictable from the covariates.
+
+Once the model is trained, we use it to predict yield for a grid of nitrogen rates. These predictions are then used to compute the marginal profit function:
+
+$$
+\operatorname{MP}(N)=P_{\text {corn }} \cdot \hat{Y}(X, N)-P_N \cdot N
+$$
+The site specific nitrogen rate is the value of $N$ that maximizes this marginal profit function. This procedure is repeated for each observation in the test set to obtain field-specific EONR estimates. As with the other approaches, the profit-maximizing nitrogen rate is identified by conducting a grid search over a sequence of nitrogen values.
+
+
+The half R-learner artificial neural network (Half-RANN) estimates the site-specific nitrogen response function by orthogonalizing only the outcome variable while keeping the original (non-orthogonalized) nitrogen rate as the treatment input. Specifically, the orthogonalized outcome residual $\tilde{Y}_i=Y_i-\hat{g}\left(X_i\right)$, where $\hat{g}\left(X_i\right)$ is a nuisance function estimated from covariates $X$, is modeled using a neural network that takes the original treatment $N_i$ and the covariates $X_i$ as inputs. The model learns a function $f(X, N)$ using a fully connected neural network:
+
+$$
+\tilde{Y}_i=f\left(X_i, N_i\right)+\varepsilon_i
+$$
+Here, $X$ includes three observed variables that characterize the yield response function: the nitrogen level at which yield plateaus, the plateau yield level, and the intercept yield level at zero nitrogen. The nitrogen rate $N$ is included directly as one of the inputs to the network without basis transformation or orthogonalization. 
+Once the network is trained, predicted yield responses $\hat{Y}(X, N)$ are obtained across a grid of nitrogen rates. These predictions are used to compute marginal profit:
+
+$$
+\operatorname{MP}(N)=P_{\text {corn }} \cdot \hat{Y}(X, N)-P_N \cdot N
+$$
+As with other models, a grid search over candidate $N$ values is used to identify the profit-maximizing rate.
+
+The half R-learner random forest (Half-RRF) approach estimates the site-specific yield response to nitrogen by orthogonalizing the outcome variable and modeling the resulting residuals using a random forest. In this approach, only the outcome $Y$ is orthogonalized with respect to observed covariates $X$, while the nitrogen treatment variable $N$ enters the model in its original form. The goal is to capture treatment effect heterogeneity while preserving flexibility in the treatment-response relationship. 
+The model estimates the following equation:
+
+$$
+\tilde{Y}_i=f\left(X_i, N_i\right)+\varepsilon_i
+$$
+where $\tilde{Y}_i=Y_i-\hat{g}\left(X_i\right)$ is the residualized outcome, and $f(\cdot)$ is a random forest fitted to the nitrogen rate $N$ and covariates $X$.
+The model is trained using repeated K-fold cross-validation and hyperparameter tuning through grid search. Once trained, yield predictions $\hat{Y}(X, N)$ are generated for a grid of nitrogen rates. These predictions are used to compute the marginal profit function:
+
+$$
+\operatorname{MP}(N)=P_{\text {corn }} \cdot \hat{Y}(X, N)-P_N \cdot N
+$$
+This yields site-specific recommendations for nitrogen application.
+
+## Performance Measurement
+
+
+
+# Results and Discussions
+
+
+
+
+
+# Conclusion
+
+
+
+
