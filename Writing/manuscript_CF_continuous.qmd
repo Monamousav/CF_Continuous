@@ -87,7 +87,12 @@ This yields site-specific recommendations for nitrogen application.
 
 ## Performance Measurement
 
+For each simulation round, we evaluate model performance by calculating the root mean squared error (RMSE) of EONR predictions and the associated profit loss for each method. The RMSE of EONR predictions in a given simulation round is computed as follows:
 
+$$
+R M S E_{E O N R}=\sqrt{\frac{1}{n} \sum_{i=1}^n\left(\widehat{E O N R}_i-E O N R_i\right)^2}
+
+$$
 
 # Results and Discussions
 
