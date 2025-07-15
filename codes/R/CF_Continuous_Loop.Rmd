@@ -18,11 +18,11 @@ library(grf)
 library(ranger)
 library(xgboost)
 library(mgcv)
-#library(here)
+# library(here)
 library(reticulate)
 
 #--- R functions ---#
-here("Shared_codes/R") %>%
+here("codes/R") %>%
   fs::dir_ls(., full.names = TRUE) %>%
   lapply(source)
 
@@ -31,102 +31,103 @@ here("Shared_codes/R") %>%
 use_condaenv("cf_conda311", required = TRUE)
 py_config()
 py_run_string("from econml.dml import CausalForestDML; print('CausalForestDML imported OK')")
-source_python("Shared_codes/Python/run_CF_c.py")  
-
+source_python("codes/Python/run_CF_c.py")
 ```
 
 ## Data
 
 ```{r}
-# turn off multi-threading 
+# turn off multi-threading
 Sys.setenv(OMP_NUM_THREADS = 1, MKL_NUM_THREADS = 1)
 
 # load data only once, then drop
-raw_sim_data <- readRDS("Data/raw_sim_data.rds")
-rm(list = setdiff(ls(), c("raw_sim_data","np","run_CF_c_py","gm_wrapper_functions_you_need")))
+raw_sim_data <- readRDS("data/raw_sim_data.rds")
+rm(list = setdiff(ls(), c("raw_sim_data", "np", "run_CF_c_py", "gm_wrapper_functions_you_need")))
 gc()
 ```
 
 # Train CF (Train on five fields. We can simply change 5 to other numbers)
 
 ```{r}
-
 x_vars <- c("Nk", "plateau", "b0")
 T_formula <- yield ~ s(N, k = 4)
 
-
-
-output_dir <- "Results/Seperate_Results/CF_in_R/all_sim_for_cf_5_fields"
+output_dir <- "results/Seperate_Results/CF_in_R/all_sim_for_cf_5_fields"
+output_dir <- "results/Seperate_Results/CF_in_R/all_sim_for_cf_5_fields"
 if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 
 res_list_one <- lapply(1:500, function(test_sim_id) {
   result_file <- file.path(output_dir, paste0("sim_", test_sim_id, ".rds"))
-  
+
   if (file.exists(result_file)) {
     message(sprintf("Skipping sim %d (already saved)", test_sim_id))
     return(NULL)
   }
-  
-  tryCatch({
-    # Train on five fields
-    train_sim_ids <- sample(setdiff(1:500, test_sim_id), 5)
-    sim_id_ls <- c(train_sim_ids, test_sim_id)
-    
-    data <- raw_sim_data$reg_data[[1]] %>%
-      .[sim %in% sim_id_ls, ] %>%
-      .[, .(sim, data)] %>%
-      unnest(cols = c(data)) %>%
-      data.table()
-    
-    train_data <- data[sim != test_sim_id, ]
-    
-    test_data <- raw_sim_data$reg_data[[1]] %>%
-      .[sim %in% test_sim_id, ] %>%
-      .[, .(sim, data)] %>%
-      unnest(cols = c(data)) %>%
-      data.table()
-    
-    T_info <- prepare_T_mat(T_formula, train_data)
-    Y <- train_data[, yield]
-    X <- train_data[, ..x_vars] %>% as.matrix()
-    W <- X
-    te_hat_cf <- run_CF_c_py(Y, T_info$T_sp, X, W, n_estimators = 2000)
-    
-    te_info     <- get_te(te_hat_cf, test_data, x_vars)
-    T_seq       <- train_data[, seq(min(N), max(N), length.out = 200)]
-    response_dt <- find_response_semi(T_seq, T_info, te_info)
-    
-    pCorn <- 6.25 / 25.4
-    pN    <- 1 / 0.453592
-    
-    ss_eonr <- response_dt[
-      , profit := est * pCorn - pN * T
-    ][
-      , .SD[which.max(profit)], by = aunit_id
-    ][
-      , .(aunit_id, opt_N_hat = T)
-    ]
-    
-    true_eonr <- raw_sim_data$reg_data[[1]] %>%
-      .[sim == test_sim_id, ] %>%
-      .[, .(sim, data)] %>%
-      unnest(cols = c(data)) %>%
-      data.table() %>%
-      .[, .(aunit_id, b0, b1, b2, Nk)] %>%
-      .[, opt_N := (pN / pCorn - b1) / (2 * b2)] %>%
-      .[, opt_N := pmin(Nk, pmax(0, opt_N))] %>%
-      .[, .(aunit_id, opt_N)]
-    
-    combined <- ss_eonr[true_eonr, on = "aunit_id"]
-    combined[, sim := test_sim_id]
-    
-    saveRDS(combined, file = result_file)
-    
-    combined
-  }, error = function(e) {
-    message(sprintf("Error with sim %d: %s", test_sim_id, e$message))
-    return(data.table(sim = test_sim_id, aunit_id = integer(), opt_N_hat = numeric(), opt_N = numeric()))
-  })
+
+  tryCatch(
+    {
+      # Train on five fields
+      train_sim_ids <- sample(setdiff(1:500, test_sim_id), 5)
+      sim_id_ls <- c(train_sim_ids, test_sim_id)
+
+      data <- raw_sim_data$reg_data[[1]] %>%
+        .[sim %in% sim_id_ls, ] %>%
+        .[, .(sim, data)] %>%
+        unnest(cols = c(data)) %>%
+        data.table()
+
+      train_data <- data[sim != test_sim_id, ]
+
+      test_data <- raw_sim_data$reg_data[[1]] %>%
+        .[sim %in% test_sim_id, ] %>%
+        .[, .(sim, data)] %>%
+        unnest(cols = c(data)) %>%
+        data.table()
+
+      T_info <- prepare_T_mat(T_formula, train_data)
+      Y <- train_data[, yield]
+      X <- train_data[, ..x_vars] %>% as.matrix()
+      W <- X
+      te_hat_cf <- run_CF_c_py(Y, T_info$T_sp, X, W, n_estimators = 2000)
+
+      te_info <- get_te(te_hat_cf, test_data, x_vars)
+      T_seq <- train_data[, seq(min(N), max(N), length.out = 200)]
+      response_dt <- find_response_semi(T_seq, T_info, te_info)
+
+      pCorn <- 6.25 / 25.4
+      pN <- 1 / 0.453592
+
+      ss_eonr <- response_dt[
+        , profit := est * pCorn - pN * T
+      ][
+        , .SD[which.max(profit)],
+        by = aunit_id
+      ][
+        , .(aunit_id, opt_N_hat = T)
+      ]
+
+      true_eonr <- raw_sim_data$reg_data[[1]] %>%
+        .[sim == test_sim_id, ] %>%
+        .[, .(sim, data)] %>%
+        unnest(cols = c(data)) %>%
+        data.table() %>%
+        .[, .(aunit_id, b0, b1, b2, Nk)] %>%
+        .[, opt_N := (pN / pCorn - b1) / (2 * b2)] %>%
+        .[, opt_N := pmin(Nk, pmax(0, opt_N))] %>%
+        .[, .(aunit_id, opt_N)]
+
+      combined <- ss_eonr[true_eonr, on = "aunit_id"]
+      combined[, sim := test_sim_id]
+
+      saveRDS(combined, file = result_file)
+
+      combined
+    },
+    error = function(e) {
+      message(sprintf("Error with sim %d: %s", test_sim_id, e$message))
+      return(data.table(sim = test_sim_id, aunit_id = integer(), opt_N_hat = numeric(), opt_N = numeric()))
+    }
+  )
 })
 ```
 
