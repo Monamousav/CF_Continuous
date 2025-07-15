@@ -93,6 +93,21 @@ $$
 R M S E_{E O N R}=\sqrt{\frac{1}{n} \sum_{i=1}^n\left(\widehat{E O N R}_i-E O N R_i\right)^2}
 
 $$
+To assess the predictive accuracy and economic relevance of these modeling approaches, we design a set of simulation experiments that reflect realistic agronomic conditions. These simulations serve as a controlled environment for evaluating model performance in estimating yield response functions and recommending optimal nitrogen rates.
+
+
+## Simulation Scenarios
+
+To evaluate the performance of the proposed models we design Monte Carlo simulations that mimic a typical on-farm precision experimentation (OFPE) setting. These simulations examine the ability of each method to accurately estimate the site-specific yield response to nitrogen application and the EONR under varying data availability conditions.
+
+Our simulation consists of 500 independently generated fields, each representing a distinct agronomic environment with field-specific parameters that shape the crop’s response to nitrogen application. These parameters vary systematically across fields to introduce heterogeneity in yield responses. The true yield response in each field follows a quadratic-plateau functional form, a widely used structure for modeling nitrogen response curves in agronomic studies.
+
+For each simulation round, one field is selected as the test field. The remaining fields are used to construct the training set in three scenarios: (1) one-field training, (2) five-field training, and (3) ten-field training. These scenarios allow us to assess how model performance changes with the size and diversity of training data. Within each round, the model is trained on the designated number of training fields and then used to estimate the yield response function and the site-specific EONR for the test field.
+
+The experimental design within each field consists of randomized nitrogen treatment rates applied across plots. The nitrogen rates vary between fields and are drawn to reflect realistic trial setups that span a range of agronomic optima. For evaluation purposes, we use a grid of candidate nitrogen rates to compute predicted yield and associated marginal profit for each observation. The predicted EONR is the nitrogen rate that maximizes predicted profit.
+
+
+
 
 # Results and Discussions
 
