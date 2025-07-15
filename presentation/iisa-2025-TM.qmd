@@ -1,0 +1,337 @@
+---
+title: "Single-orthogonalized Neural Network for Site-specific Yield Response Function Estimation"
+author:
+  - name: Taro Mieno
+    affiliations:
+      - name: University of Nebraska Lincoln
+  - name: Mona Mousavi
+    affiliations:
+      - name: University of Nebraska Lincoln
+  - name: David Bullock
+    affiliations:
+      - name: University of Illinois Urbana Champaign 
+date: 06/12/2025
+format:
+  beamer:
+    theme: AnnArbor
+format: 
+  revealjs: 
+    theme: [default, custom.scss]
+    embed-resources: true
+    html-math-method: mathjax
+    fontsize: 1.4em
+    callout-icon: false
+    scrollable: true
+    echo: true
+---
+
+```{r, include = FALSE}
+library(terra)
+library(sf)
+library(tidyterra)
+library(ggplot2)
+library(data.table)
+library(dplyr)
+library(flextable)
+```
+
+
+## Background
+
++ Nitrogen rate management for agricultural production is an important issue (economic, environmental, health)
+
++ Applying right amount of nitrogen at right place (and right time) recognizing the need for nitrogen based on observed characteristics (soil N, soil and field characteristics, weather)
+
++ On-farm field experiment (a way)
+  + run trials and collect data
+  + <span style = "color: blue;"> estimate how yield responds to nitrogen based on observed characteristics </span>
+  + identify site-specific optimal nitrogen rates based on the estimated model
+
++ Existing prediction oriented approaches (simple application of random forest, neural network) tend to fail for identifying the heterogeneous causal impact of a treatment
+
++ Existing causal machine learning approaches  (e.g., r-learner) specialize in identifying the impact of a binary treatment (but, we want yield response <span style = "color: blue;"> curve </span>)
+
+```{=tex}
+\begin{align*}
+\Delta Yield = f(N_1| X) - f(N_0| X)\;\; \mbox{, where } N_1 > N_0
+\end{align*}
+```
+
+
+## Research Objective
+
++ Propose an ML approach that can identify heterogenous treatment effects well when the treatment variable is continuous 
+
++ Test the performance of the approach against existing approaches that are commonly used via Monte Carlo simulation
+
+## Double machine learning and our approach
+
+::: {.panel-tabset}
+
+### Recap on Double-ML
+
+```{=tex}
+\begin{align*}
+\mbox{Model 1: } Y = \theta(X)\cdot T + g(X, W) + v
+\end{align*}
+```
+
++ $Y$: Dependent variable 
++ $T$: Binary treatment variable (variable of interest) 
++ $X$: Set of variables that affect the impact of $T$ and also $Y$ directly
++ $\theta(X)$: Treatment effect as a function of $X$
++ $W$: Set of variables that affect $Y$ directly
++ $v$: Error term
+
+::: {.fragment}
+:::{.callout-note title="Steps"}
+1. Regress $Y$ on $X$ and $W$ and predict $E[Y|X,W]$ (denoted as $f(X,W)$)
+2. Regress $T$ on $X$ and $W$ and predict $T[Y|X,W]$ (denoted as $h(X,W)$)
+3. Regress $Y-f(X,W)$ on $T-h(X,W)$
+:::
+:::
+<!--end of the fragment-->
+
+
+### Single-orthogonalized (our approach)
+
+```{=tex}
+\begin{align*}
+\mbox{Model 2: } Y = \theta(X, T) + g(X, W) + v
+\end{align*}
+```
+
++ $T$: <span style = "color: blue;">Continuous </span> treatment variable (e.g., nitrogen rate) 
++ $\theta(X, T)$: Impact of $X$ and $T$ with their full interactions allowed
+
+::: {.fragment}
+:::{.callout-note title="Steps"}
+1. Regress $Y$ on $X$ and $W$ and predict $E[Y|X,W]$ (denoted as $f(X,W)$)
+3. Regress $Y-f(X,W)$ on $T$
+:::
+:::
+<!--end of the fragment-->
+
+
+::: {.fragment}
+:::{.callout-important title="Reasoning"}
++ The orthogonalization shifts the attention from the variations in $Y$ to the variations in $Y-f(X,W)$ just due to $X$ and $T$. 
++ This is particularly effective if the share of $g(X,W)$ in the total variation of $Y$ is greater relative to $\theta(X, T)$.
+:::
+:::
+<!--end of the fragment-->
+
+
+### Double-orthogonalized?
+
+```{=tex}
+\begin{align*}
+\mbox{Model 1: } Y & = \theta(X)\cdot T + g(X, W) + v \\
+\mbox{Model 2: } Y & = \theta(X, T) + g(X, W) + v
+\end{align*}
+```
+
++ In model 1, Double-orthogonalization is fine because the model is linear in $T$.
++ In model 2, Orthogonalizing $T$ does not work: $\widehat{\theta}(X, T - g(X, W))$ cannot be used to approximate $E[\theta(X, T)]$.
+:::
+<!--end of panel-->
+
+
+## Simulation: Data Generation
+
+::: {.panel-tabset}
+
+### Data generating process
+
+Corn yield is assumed to follow the quadratic plateau functional form as follows:
+
+```{=tex}
+\begin{align*}
+Y_{j, i}=f\left(N, \alpha_{j, i}, \alpha_{j, i}, \gamma{j, i}, \tau{j, i}\right)= \begin{cases}\alpha_{j, i}+\beta_{j, i} N+\gamma_{j, i} N^2+\varepsilon_{j, i}, & N<\tau_{j, i} \\ \alpha_{j, i}+\beta_{j, i} \tau_{j, i}+\gamma_{j, i} \tau_{j, i}^2+\varepsilon_{j, i}, & N \geq \tau_{j, i}\end{cases}
+\end{align*}
+```
+
++ $Y$: Corn yield
++ $N$: Nitrogen rate
++ $\alpha, \beta, \gamma, \tau$: parameters (consider them observable soil/field characteristics) that vary within a field in a spatially correlated manner and govern how yield responds to $N$
+
+### On-farm trial (nitrogen rate)
+
+```{r}
+#| echo: false   
+#| fig-width: 9
+#| out-width: 9in
+knitr::include_graphics("g_trial.png") 
+```
+
+### A parameter ($\tau$)
+
+```{r}
+#| echo: false   
+#| fig-width: 9
+#| out-width: 9in
+knitr::include_graphics("g_par.png") 
+```
+
+### Corn yield
+
+```{r}
+#| echo: false   
+#| fig-width: 9
+#| out-width: 9in
+knitr::include_graphics("g_yield.png") 
+```
+
+
+
+```{r}
+#| echo: false
+#| eval: false
+data <- 
+  readRDS(here::here("presentation/sim_data_1.rds"))$data[[1]] %>%
+  sf::st_as_sf()
+
+g_yield <- 
+  ggplot(data = data) +
+  geom_sf(aes(fill = yield)) +
+  scale_fill_viridis_c(name = "Corn Yield (kg/ha)") +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    legend.key.width = unit(2.5, "cm"),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+ggsave("presentation/g_yield.png", g_yield, dpi = 300, height = 4)
+
+g_trial <-
+  ggplot(data = data) +
+  geom_sf(aes(fill = factor(N_tgt))) +
+  scale_fill_viridis_d(name = "N rate (kg/ha)") +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    legend.key.width = unit(1, "cm"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14)
+  )
+
+ggsave("presentation/g_trial.png", g_trial, dpi = 300, height = 4)
+
+# library(latex2exp)
+# plot(latex2exp::TeX("\\eta"))
+
+g_par <-
+  ggplot(data = data) +
+  geom_sf(aes(fill = Nk)) +
+  scale_fill_viridis_c(name = "") +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    legend.key.width = unit(3, "cm"),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+ggsave("presentation/g_par.png", g_par, dpi = 300, height = 4)
+```
+
+:::
+<!--end of panel-->
+
+
+## Simulation: Other Components
+
+::: {.panel-tabset}
+
+### Models
+
+```{=tex}
+\begin{align*}
+Y_{i,k} = f(N_{i,k}, X_{i,k}) + v_{i,k}
+\end{align*}
+```
+
+where $i$ and $k$ indicate a cell and field, respectively. 
+
++ $Y$: Crop yield
++ $N$: Nitrogen rate (lb/acre) 
++ $X$: Collection of variables ($\alpha$, $\beta$, $\gamma$, and $\tau$)
++ $v$: Error term
+
+
+<!-- ### Estimation approaches
+
+<span style = "color: blue;"> Single-orthogonalized </span>
+
+
+1. Regress $Y$ on $X$ ($N$ not included) using random forest, predict $Y$ conditional on $X$, and subtract it from $Y$ (orthogonalization)
+2. Regress the orthogonalized $Y$ on $N$ and $X$ using neural network
+
+<br>
+
+<span style = "color: blue;">Non-orthogonalized  </span>
+
+Regress $Y$ on $N$ and $X$ using neural network
+
+<br>
+
+<span style = "color: blue;">Double-orthogonalized </span>
+
+1. Regress $Y$ on $X$ ($N$ not included) using random forest, predict $Y$ conditional on $X$, and subtract it from $Y$ (orthogonalization)
+2. Regress $T$ on $X$ ($N$ not included) using random forest, predict $T$ conditional on $X$, and subtract it from $T$ (orthogonalization)
+3. Regress the orthogonalized $Y$ on orthogonalized $N$ and $X$ using neural network -->
+
+### Scenarios
+
++ Estimation approaches:
+
+```{r}
+#| echo: false
+data.table(
+  Approach = c("Double-orthogonalized", "Single-orthogonalized", "Non-orthogonalized"),
+  "Y-orthogonalization" = c("Randome Forest", "Randome Forest", "NA"),
+  "T-orthogonalization" = c("Randome Forest", "NA", "NA"),
+  "Final stage" = c("Neural Network", "Neural Network", "Neural Network")
+) %>%
+flextable() %>%
+fontsize(size = 16, part = "all") %>%
+autofit()
+```
+
++ Number of fields from which data is combined: 1, 5, and 10
+
+### Site-specific EONR estimation
+
+For a given price of corn and nitrogen (denoted $P_{Corn}$ and $P_{N}$, respectively), economically optimal nitrogen rate (EONR) is found for each cell of all the fields by solving the following profit maximization problem:
+
+```{=tex}
+\begin{align*}
+\widehat{EONR}_{i,k} = Argmax_{N} \;\; P_{Corn} \times \widehat{f}(N, X_{i,k}) - P_{N} \times N
+\end{align*}
+```
+
++ $\widehat{f}$: estimated yield response curve 
+
+### Model evaluation
+
+Model evaluation is based on the accuracy of predicting <span style = "color: blue;"> site-specific economically optimal nitrogen rates </span>($\widehat{EONR}$). 
+
+```{=tex}
+\begin{align*}
+RMSE = \sqrt{\sum_i^N \sum_k^K(EONR_{i,k} - \widehat{EONR_{i,k}})^2/NK}
+\end{align*}
+```
+
+:::
+<!--end of panel-->
+
+
+## Results
+
+
+## Conclusion
+
+
+
