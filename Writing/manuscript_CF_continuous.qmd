@@ -1,15 +1,89 @@
+---
+title: "temp"
+format:
+  html: default
+execute:
+  echo: false
+---
+
+```{r}
+#| include: false
+library(data.table) 
+library(dplyr) 
+library(flextable) 
+library(officer) 
+```
 
 # Introduction
 
 
-# Materials and Method
+# Method
+
+We run Monte Carlo simulation to test the performance of ...
 
 ## Data generation
 
 
 ## Models and estimation procedures
 
+
+<span style = "color: blue;"> Explain the types of estimation you do first in general. You have double-orthogonalized, single-orthogonalized, and non-orthogonalized. The difference among the models we try are in how we do the orthogonalization and final stage estimation. The table below shows all the cases you consider. </span> 
+
+<span style = "color: blue;"> Use tex and align environment for equations like below instead of using $$. </span>
+
+```{=tex}
+\begin{align*}
+Y = f(X)
+\end{align*}
+```
+
+```{r}
+#| include: false
+f_est <-
+  data.table(
+    "Approach Label" = c("DO-NN", "SO-RFF", "SO-NN", "DO-CF","NO-NN", "NO-RF"),
+    "Approach Type" = c("Double-orthogonalized", "Single-orthogonalized", "Single-orthogonalized", "Double-orthogonalized", "Non-orthogonalized", "Non-orthogonalized"),
+    "Y-orthogonalization" = c("Randome Forest", "Randome Forest", "Randome Forest", "Randome Forest", "NA", "NA"),
+    "T-orthogonalization" = c("Randome Forest", "NA", "NA", "Randome Forest", "NA", "NA"),
+    "Final stage" = c("Neural Network", "Random Forest", "Neural Network", "Causal Forest", "Neural Network", "Random Forest")
+  ) %>%
+  flextable() %>%
+  fontsize(size = 16, part = "all") %>%
+  autofit()
+
+flextable::save_as_image(f_est, here::here("writing/f_est.png"), res = 300)
+```
+
+```{r}
+#| echo: false
+#| fig-width: 4
+#| out-width: 4in
+knitr::include_graphics(here::here("writing/f_est.png"))
+```
+
 We employ three modeling approaches to estimate the yield response function to nitrogen application rates and to determine the site-specific optimal nitrogen rate. First, we implement artificial neural networks (ANNs) using two variations of the R-learner framework. In the first variation (RANN), both the outcome variable (yield) and the treatment variable (nitrogen rate) are orthogonalized. In the second variation, only the outcome variable is orthogonalized (half_RANN). Next, we apply an S-learner ANN, in which yield is modeled as a function of the nitrogen rate and a set of observed covariates (X), without orthogonalization. In addition to these ANN-based methods, we also use a causal forest (CF), implemented as a double machine learning approach following the R-learner framework. Finally, we include a random forest (RF) model using the R-learner approach with orthogonalization of the outcome variable only (half-RRF).
+
+<span style = "color: red;"> Right now, you are explaining how EONR is calculated by method. But, all the estimation cases follow the same procedure. For all cases, you have $\hat{y} = \hat{f}(N:X)$. So, you can just this function in explaining how to get EONR for all the cases. You are repeating the same equations of profit three times. You should recognized that problem. Think carefully how to structure the section. Don't just write. </span>
+
+### Non-orthogonalized ANN (NO-NN) and RF (NO-RF)
+
+<span style = "color: blue;"> I am adding NO-RF as one of the method to consider. Write code for this and get the results. It should be easy. </span>
+
+Neither of Y or X is orthogonalized
+
+The S-learner ANN approach estimates the following model non-parametrically without imposing any functional forms on the relationships between the variables.
+
+$$
+Y=f(X, N)+v
+$$
+
+<span style = "color: blue;"> As I said, remove the sentences below. </span>
+
+Once $f(X, N)$ is estimated (denote it as $\hat{f}(X, N)$ ), then the conditional treatment effect of moving from one rate ( $N_0$ ) to another ( $N_1$ ) can be obtained by $\hat{f}\left(X, N_1\right)-\hat{f}\left(X, N_0\right)$. The associated change in profit is $P_{\text {corn }} \hat{f}\left(X, N_1\right)-P_{\text {corn }} \hat{f}\left(X, N_0\right)-P_N\left(N_1-N_0\right)$. Similar to the CF approach, a grid search is used to identify numerically the optimal nitrogen rate.
+
+### CF-continuous
+
+<span style = "color: blue;"> This is an inaccurate and insufficient explanations. Add what I wrote for CF in the manuscript I shared. </span>
 
 The econometric model to estimate the R-learner CF is as following:
 
@@ -19,9 +93,13 @@ $$
 where $Y$ is corn yield, $N$ is nitrogen rate (treatment variable), and $X$ is a collection of observed variables, $\alpha, \beta$, and $\gamma$. In this equation, $g(X)$ is the nuisance function.
 Here the treatment variable (nitrogen rate) is split into $K$ basis variables. Then, each of the basis variables are orthogonalized by cross-fitting using $X$ as covariates via boosted regression forest. Let the treatment basis variables be denoted as $S_k \tilde{(T)}$ for $k=1, \ldots, K$. Then, the second stage solves the following problem using the CF algorithm: 
 
+
 $$
 \operatorname{Min} \sum_{i=1}^N\left[{Y}_i-\sum_{k=1}^K \theta_k\left(X_i\right) \tilde{S}_k\left(N_i\right)\right]
 $$
+
+
+<span style = "color: blue;"> This is a description for binary treatment case. After running CF-continuous, you are getting $\hat{y} = \hat{f}(N:X)$</span>
 
 Once $\theta_k\left(X_i\right)$ are estimated, then the conditional treatment effect of moving from one rate $\left(N_0\right)$ to another $\left(N_1\right)$ for observation $i$ can be obtained by $\sum_{k=1}^K \theta_k(X) \tilde{S}_k\left(N_1\right)-\sum_{k=1}^K \theta_k(X) \tilde{S}_k\left(N_0\right)$.
 
@@ -34,13 +112,7 @@ $$
 A grid search over a sequence of $N$ values is used to identify the profit-maximizing N rate.
 
 
-The S-learner ANN approach estimates the following model non-parametrically without imposing any functional forms on the relationships between the variables.
-
-$$
-Y=f(X, N)+v
-$$
-Once $f(X, N)$ is estimated (denote it as $\hat{f}(X, N)$ ), then the conditional treatment effect of moving from one rate ( $N_0$ ) to another ( $N_1$ ) can be obtained by $\hat{f}\left(X, N_1\right)-\hat{f}\left(X, N_0\right)$. The associated change in profit is $P_{\text {corn }} \hat{f}\left(X, N_1\right)-P_{\text {corn }} \hat{f}\left(X, N_0\right)-P_N\left(N_1-N_0\right)$. Similar to the CF approach, a grid search is used to identify numerically the optimal nitrogen rate.
-
+### Double-orthogonalized ANN (DO-ANN) and RF (DO-RFF)
 
 The R-learner ANN (RANN) approach estimates the site-specific nitrogen response function by first orthogonalizing the outcome variable and then modeling the residuals using a neural network. Specifically, the outcome residual $y_i-\hat{g}\left(X_i\right)$ is regressed on orthogonalized treatment basis variables $\tilde{T}_1, \tilde{T}_2, \tilde{T}_3$, interacted with covariates $X$, using a structured artificial neural network.
 The model architecture includes three separate branches, each corresponding to one of the orthogonalized basis variables for the nitrogen rate. Each branch processes the covariates $X$ and multiplies the output by one of the treatment basis variables. The final yield prediction is the sum of the outputs from all three branches:
@@ -57,6 +129,9 @@ $$
 $$
 The site specific nitrogen rate is the value of $N$ that maximizes this marginal profit function. This procedure is repeated for each observation in the test set to obtain field-specific EONR estimates. As with the other approaches, the profit-maximizing nitrogen rate is identified by conducting a grid search over a sequence of nitrogen values.
 
+### Single-orthogonalized NN (SO-NN) and (SO-RF)
+
+<span style = "color: blue;"> Once you explain how SO works. The difference between SO-NN and SO-RF is just the final stage estimation. Write that way to reduce unnecessary writing</span>
 
 The half R-learner artificial neural network (Half-RANN) estimates the site-specific nitrogen response function by orthogonalizing only the outcome variable while keeping the original (non-orthogonalized) nitrogen rate as the treatment input. Specifically, the orthogonalized outcome residual $\tilde{Y}_i=Y_i-\hat{g}\left(X_i\right)$, where $\hat{g}\left(X_i\right)$ is a nuisance function estimated from covariates $X$, is modeled using a neural network that takes the original treatment $N_i$ and the covariates $X_i$ as inputs. The model learns a function $f(X, N)$ using a fully connected neural network:
 
@@ -85,16 +160,21 @@ $$
 $$
 This yields site-specific recommendations for nitrogen application.
 
+## Estimation of site-specific EONR
+
+
 ## Performance Measurement
 
 For each simulation round, we evaluate model performance by calculating the root mean squared error (RMSE) of EONR predictions and the associated profit loss for each method. The RMSE of EONR predictions in a given simulation round is computed as follows:
 
-$$
-R M S E_{E O N R}=\sqrt{\frac{1}{n} \sum_{i=1}^n\left(\widehat{E O N R}_i-E O N R_i\right)^2}
 
-$$
+```{=tex}
+\begin{align*}
+RMSE_{EONR}=\sqrt{\frac{1}{n} \sum_{i=1}^n\left(\widehat{EONR}_i-EONR_i\right)^2}
+\end{align*}
+```
+
 To assess the predictive accuracy and economic relevance of these modeling approaches, we design a set of simulation experiments that reflect realistic agronomic conditions. These simulations serve as a controlled environment for evaluating model performance in estimating yield response functions and recommending optimal nitrogen rates.
-
 
 ## Simulation Scenarios
 
