@@ -8,7 +8,7 @@ if __name__ == "__main__":
     # === RANN ===
     #run_rann("RANN", 1, data_2nd_stage, evall_N_seq, device)
     #run_rann("RANN", 5, data_2nd_stage, evall_N_seq, device)
-    run_rann("RANN", 10, data_2nd_stage, evall_N_seq, device)
+    #run_rann("RANN", 10, data_2nd_stage, evall_N_seq, device)
 
     # === Simple ANN ===
     #run_simpleann("SimpleANN", 1, data_2nd_stage, evall_N_seq, device)
@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
 # === half RRF ===
     #run_halfrrf("HalfRRF", 1, data_2nd_stage, evall_N_seq, device)
-    #run_halfrrf("HalfRRF", 5, data_2nd_stage, evall_N_seq, device)
+    run_halfrrf("HalfRRF", 5, data_2nd_stage, evall_N_seq, device)
     #run_halfrrf("HalfRRF", 10, data_2nd_stage, evall_N_seq, device)
 
    

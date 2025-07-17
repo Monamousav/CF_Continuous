@@ -48,8 +48,8 @@ print(os.getcwd())
 
 # %%
 # === LOAD DATA ===
-data_2nd_stage = pyreadr.read_r('./Data/data_20230504/data_2nd_stage.rds')[None]
-evall_N_seq = pyreadr.read_r('./Data/data_20230504/evall_N_seq.rds')[None]
+data_2nd_stage = pyreadr.read_r('./data/data_20230504/data_2nd_stage.rds')[None]
+evall_N_seq = pyreadr.read_r('./data/data_20230504/evall_N_seq.rds')[None]
 sim_ids_all = np.sort(data_2nd_stage['sim'].unique())
 
 # %%
@@ -67,10 +67,10 @@ def create_split_csv(n_fields, output_path):
     df = pd.DataFrame(splits)
     df.to_csv(output_path, index=False)
 
-os.makedirs("./Data/train_test_split", exist_ok=True)
-create_split_csv(1, './Data/train_test_split/train_test_splits_1fields.csv')
-create_split_csv(5, './Data/train_test_split/train_test_splits_5fields.csv')
-create_split_csv(10, './Data/train_test_split/train_test_splits_10fields.csv')
+os.makedirs("./data/train_test_split", exist_ok=True)
+create_split_csv(1, './data/train_test_split/train_test_splits_1fields.csv')
+create_split_csv(5, './data/train_test_split/train_test_splits_5fields.csv')
+create_split_csv(10, './data/train_test_split/train_test_splits_10fields.csv')
 
 # %%
 

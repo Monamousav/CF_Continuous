@@ -10,16 +10,16 @@ from sklearn.model_selection import RepeatedKFold, GridSearchCV
 
 def train_half_rf_model_from_splits(data_2nd_stage, evall_N_seq, split_csv_path, folder_name):
      # Define root results directory and build the full output path
-    base_results_dir = os.path.join(os.getcwd(), 'Results_fixed')
+    base_results_dir = os.path.join(os.getcwd(), 'results')
     output_folder = os.path.join(base_results_dir, folder_name)
     os.makedirs(output_folder, exist_ok=True)
     splits_df = pd.read_csv(split_csv_path)
     p_corn = 6.25 / 25.4
     p_N = 1 / 0.453592
 
-    row = splits_df[splits_df['test_id'] == 1].iloc[0:1].copy()
-    for _, row in row.iterrows():
-    #for _, row in splits_df.iterrows():    
+    #row = splits_df[splits_df['test_id'] == 1].iloc[0:1].copy()
+    #for _, row in row.iterrows():
+    for _, row in splits_df.iterrows():    
         test_id = row['test_id']
         train_ids = row[[col for col in row.index if col.startswith('train_')]].values
 
@@ -76,7 +76,7 @@ def train_half_rf_model_from_splits(data_2nd_stage, evall_N_seq, split_csv_path,
 
 # === Wrap ===
 def run_model(model_type, n_fields, data_2nd_stage, evall_N_seq, device):  # <- added device here
-    split_csv_path = f'./Data/train_test_split/train_test_splits_{n_fields}fields.csv'
+    split_csv_path = f'./data/train_test_split/train_test_splits_{n_fields}fields.csv'
     folder_map = {
         ("HalfRRF", 1): "HalfRRF_one_field",
         ("HalfRRF", 5): "HalfRRF_five_fields",

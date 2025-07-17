@@ -26,7 +26,7 @@ def train_rann_model_from_splits(data_2nd_stage, evall_N_seq, split_csv_path, fo
             return self.branch1(x)*T[:,0:1] + self.branch2(x)*T[:,1:2] + self.branch3(x)*T[:,2:3]
 
     # Define root results directory and build the full output path
-    base_results_dir = os.path.join(os.getcwd(), 'Results_fixed')
+    base_results_dir = os.path.join(os.getcwd(), 'results')
     output_folder = os.path.join(base_results_dir, folder_name)
     os.makedirs(output_folder, exist_ok=True)
 
@@ -111,7 +111,7 @@ def train_rann_model_from_splits(data_2nd_stage, evall_N_seq, split_csv_path, fo
 
 # === MODEL DISPATCHER ===
 def run_model(model_type, n_fields, data_2nd_stage, evall_N_seq, device):
-    split_csv_path = f'./Data/train_test_split/train_test_splits_{n_fields}fields.csv'
+    split_csv_path = f'./data/train_test_split/train_test_splits_{n_fields}fields.csv'
     folder_map = {
         ("RANN", 1): "RANN_outcome_one_field",
         ("RANN", 5): "RANN_outcome_five_fields",
