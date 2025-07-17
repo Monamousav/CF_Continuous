@@ -1,5 +1,5 @@
 ---
-title: "temp"
+title: "Estimation of the effect of a continuous treatment variable"
 format:
   html: default
 execute:
@@ -8,14 +8,17 @@ execute:
 
 ```{r}
 #| include: false
-library(data.table) 
-library(dplyr) 
-library(flextable) 
-library(officer) 
+library(data.table)
+library(dplyr)
+library(flextable)
+library(officer)
 ```
 
 # Introduction
 
++ Background
++ Why we need the methods we are proposing? Motivation.
++ Summary of findings 
 
 # Method
 
@@ -186,13 +189,7 @@ For each simulation round, one field is selected as the test field. The remainin
 
 The experimental design within each field consists of randomized nitrogen treatment rates applied across plots. The nitrogen rates vary between fields and are drawn to reflect realistic trial setups that span a range of agronomic optima. For evaluation purposes, we use a grid of candidate nitrogen rates to compute predicted yield and associated marginal profit for each observation. The predicted EONR is the nitrogen rate that maximizes predicted profit.
 
-
-
-
 # Results and Discussions
-
-
-
 
 
 # Conclusion
