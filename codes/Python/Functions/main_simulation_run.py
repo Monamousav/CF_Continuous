@@ -2,6 +2,7 @@ from RANN import run_model as run_rann
 from simple_ANN import run_model as run_simpleann
 from half_RANN import run_model as run_half_RANN
 from half_RRF import run_model as run_halfrrf
+from NO_RF import run_model as run_NO_RF
 from Generate_train_test_splits import data_2nd_stage, evall_N_seq, device
 
 if __name__ == "__main__":
@@ -12,7 +13,7 @@ if __name__ == "__main__":
 
     # === Simple ANN ===
     #run_simpleann("SimpleANN", 1, data_2nd_stage, evall_N_seq, device)
-    #run_simpleann("SimpleANN", 5, data_2nd_stage, evall_N_seq, device)
+    run_simpleann("SimpleANN", 5, data_2nd_stage, evall_N_seq, device)
     #run_simpleann("SimpleANN", 10, data_2nd_stage, evall_N_seq, device)
 
 
@@ -24,11 +25,14 @@ if __name__ == "__main__":
 
 # === half RRF ===
     #run_halfrrf("HalfRRF", 1, data_2nd_stage, evall_N_seq, device)
-    run_halfrrf("HalfRRF", 5, data_2nd_stage, evall_N_seq, device)
+    #run_halfrrf("HalfRRF", 5, data_2nd_stage, evall_N_seq, device)
     #run_halfrrf("HalfRRF", 10, data_2nd_stage, evall_N_seq, device)
 
    
 
-
+# === NO_RF ===
+    #run_NO_RF("NO_RF", 1, data_2nd_stage, evall_N_seq, device)
+    #run_NO_RF("NO_RF", 5, data_2nd_stage, evall_N_seq, device)
+    #run_NO_RF("NO_RF", 10, data_2nd_stage, evall_N_seq, device)
 
 
