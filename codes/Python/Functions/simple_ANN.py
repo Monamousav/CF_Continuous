@@ -29,7 +29,7 @@ def train_simple_ann_model_from_splits(data_2nd_stage, evall_N_seq, split_csv_pa
             return self.net(x)
 
      # Define root results directory and build the full output path
-    base_results_dir = os.path.join(os.getcwd(), 'result')
+    base_results_dir = os.path.join(os.getcwd(), 'results')
     output_folder = os.path.join(base_results_dir, folder_name)
     os.makedirs(output_folder, exist_ok=True)
 
