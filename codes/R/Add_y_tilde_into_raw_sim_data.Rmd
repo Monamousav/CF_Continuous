@@ -1,0 +1,42 @@
+# add y_tilde to raw_sim_data
+
+
+# load raw_sim_data and data_2nd_stage
+```{r}
+raw_sim_data <- readRDS("/Users/mmousavi2/Dropbox/Local-Cross-Validation/Shared/Data/raw_sim_data.rds")
+
+data_2nd_stage <- readRDS("/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous/data/data_20230504/data_2nd_stage.rds")
+
+
+```
+
+```{r}
+# insert y_tilde into raw_sim_data
+raw_sim_data$reg_data[[1]] <- raw_sim_data$reg_data[[1]] %>%
+  mutate(
+    data = pmap(
+      list(data, sim),
+      function(inner_df, sim_val) {
+        inner_df %>%
+          # temporarily add sim so we can join
+          mutate(sim = sim_val) %>%
+          left_join(
+            data_2nd_stage %>% select(sim, aunit_id, y_tilde),
+            by = c("sim", "aunit_id")
+          ) %>%
+          # remove the sim column—leave only the original columns + y_tilde
+          select(-sim)
+      }
+    )
+  )
+
+```
+
+# save it
+```{r}
+saveRDS(
+  raw_sim_data,
+  "/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous/data/raw_sim_data.rds"
+)
+
+```
