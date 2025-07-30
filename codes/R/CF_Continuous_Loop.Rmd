@@ -77,7 +77,7 @@ source("/Users/mmousavi2/Dropbox/Causal_climate/My_own_Shared/Causal-ML-continuo
 
 
 # how many fields to train on?
-n_fields <- 5
+n_fields <- 1
 
 # ─── PATHS via here() ──────────────────────────────────────────────────────────
 
@@ -99,8 +99,8 @@ train_test_splits <- read_csv(splits_file)
 # ─── MODEL LOOP ────────────────────────────────────────────────────────────────
 
 x_vars    <- c("Nk", "plateau", "b0")
-T_formula <- yield ~ s(N, k = 4)
-
+#T_formula <- yield ~ s(N, k = 4)
+T_formula <- y_tilde ~ s(N, k = 4)
 # cf_results <- lapply(train_test_splits$test_id, function(test_sim_id)
 cf_results <- lapply(train_test_splits$test_id, function(test_sim_id) {
   result_file <- file.path(output_dir, paste0("sim_", test_sim_id, ".rds"))
@@ -110,7 +110,8 @@ cf_results <- lapply(train_test_splits$test_id, function(test_sim_id) {
   }
 
   tryCatch({
-  
+    # grab exactly n_fields train IDs for this test
+    # base‐R subsetting – unambiguous
     split_row     <- train_test_splits[train_test_splits$test_id == test_sim_id, ]
     train_sim_ids <- as.integer(unlist(split_row[paste0("train_", 1:n_fields)]))
 
@@ -132,7 +133,7 @@ cf_results <- lapply(train_test_splits$test_id, function(test_sim_id) {
 
     # fit causal forest
     T_info     <- prepare_T_mat(T_formula, train_data)
-    Y          <- train_data[, yield]
+    Y          <- train_data[, y_tilde]
     X          <- train_data[, ..x_vars] %>% as.matrix()
     W          <- X
     te_hat_cf  <- run_CF_c_py(Y, T_info$T_sp, X, W, n_estimators = 2000)
@@ -155,15 +156,20 @@ cf_results <- lapply(train_test_splits$test_id, function(test_sim_id) {
 
     # true EONR
    true_eonr <- raw_sim_data$reg_data[[1]] %>%
-
+  # 1) keep only this sim
   .[sim == test_sim_id, ] %>%
-
+  # 2) grab the nested data column
   .[, .(sim, data)] %>%
+  # 3) unnest into rows
   unnest(cols = c(data)) %>%
+  # 4) coerc e to data.table so you can use [ , … ]
   data.table() %>%
+  # 5) pull out just the columns you need
   .[, .(aunit_id, b0, b1, b2, Nk)] %>%
+  # 6) compute true opt_N
   .[, opt_N := (pN / pCorn - b1) / (2 * b2)] %>%
   .[, opt_N := pmin(Nk, pmax(0, opt_N))] %>%
+  # 7) keep only the ID + opt_N
   .[, .(aunit_id, opt_N)]
 
 
@@ -183,7 +189,6 @@ cf_results <- lapply(train_test_splits$test_id, function(test_sim_id) {
     )
   })
 })
-
 ```
 
 
