@@ -4,6 +4,7 @@ format:
   html: default
 execute:
   echo: false
+bibliography: references.bib
 ---
 
 ```{r}
@@ -28,6 +29,33 @@ We run Monte Carlo simulation to test the performance of ...
 
 
 ## Models and estimation procedures
+
+<span style = "color: blue;"> Use math here to explain orthogonalization. This is where you explain what SO and DO in general. The sections below add specifics to the individual approaches we take. You also need to provide contexts (past studies). </span>
+
+<span style = "color: blue;"> The model of interest is always the below no matter what approaches: </span>
+
+
+```{=tex}
+\begin{align*}
+y = f(X, N) + g(W) + v
+\end{align*}
+```
+
+
++ $y$: dependent variable
++ $X$: set of covariates that induce heterogeneity in the impact of $N$ on $y$
++ $W$: set of covariates that affect $y$, but not interactively with $N$
++ $v$: the error term
+
++ <span style = "color: blue;"> Start with non-orthogonalization approach. This is what is typically done in the literature (cite such papers). Talk about why this can be problematic like @kakimoto2022causal. They are not focused on causal impact identification, rather prediction of the level of the dependent variable. </span>
+
++ <span style = "color: blue;"> Shift the attention to DML in the binary treatment context (introduce the idea of orthogonalization and why they are done, cite DML papers) as a way to identify causal impact (causal machine learning). </span>
+
++ <span style = "color: blue;"> Our context is different because we have a continuous treatment variable. Introduce the idea of orthogonalization here and why SO can work but not DO because of interactions of the treatment variable with other covariates (heterogeneity-inducing variables). </span>
+ 
+<span style = "color: blue;"> This is the end of the general discussion of different approaches we use.  </span>
+
+<span style = "color: blue;"> Next talk about individual approaches just like you are doing right now. Switch DO and SO sections (Start with SO). Expand on the DO-CF approaches and why it works even though it is DO (due to linear-in-parameter nature of the spline-based approach). </span>.
 
 We implement three estimation strategies—double‑orthogonalized, single‑orthogonalized, and non‑orthogonalized—that differ only in how (and whether) we orthogonalize the outcome and treatment before the final fit. Orthogonalization here means residualizing a variable by fitting it on all covariates and then taking the difference between the observed value and its prediction (we perform all residualizations using a random‑forest model). This ensures that our final model focuses on the component of variation that is not explained by the covariates.
 
