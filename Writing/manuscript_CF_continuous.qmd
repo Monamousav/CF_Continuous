@@ -32,8 +32,64 @@ We run Monte Carlo simulation to test the performance of ...
 
 <span style = "color: blue;"> Use math here to explain orthogonalization. This is where you explain what SO and DO in general. The sections below add specifics to the individual approaches we take. You also need to provide contexts (past studies). </span>
 
-<span style = "color: blue;"> The model of interest is always the below no matter what approaches: </span>
 
+The standard approach in the precision-agriculture literature for estimating site-specific input response is to model the outcome level directly as a function of the treatment/input and covariates—e.g., estimate $Y=f(I,C)$ where $I$ is the input (like nitrogen rate) and $C$ are field characteristics—and then derive optimal input decisions from that estimated function. This is what is typically done in the recent on-farm precision experimentation literature (e.g., @barbosa2020risk; @barbosa2020modeling; @krause2020random; @gardner2021economic).
+The problem is that these methods optimize prediction of yield levels—not the causal effect of changing the input. Good level prediction at the observed input does not guarantee accurate recovery of the response function needed for optimal input choice, because the fitted $f(I,C)$ can conflate input variation with confounding and misattribute the drivers of yield variation.
+
+To identify causal effects rather than just predict levels in the single binary treatment case, researchers use double/debiased machine learning (DML), which introduces orthogonalization so the treatment-effect estimator is insensitive to small errors in the auxiliary fits (I need citation here). 
+Consider the structural model (Model 1):
+
+```{=tex}
+\begin{align*}
+Y=\theta(X) T+g(X, W)+v
+\end{align*}
+```
+
+where $Y$ is the outcome, $T \in\{0,1\}$  is the treatment, $X$ covariates that also modify the treatment effect $\theta(X)$, $W$ additional predictors of $Y$, and $v$ is noise. 
+Orthogonalization estimates $f(X, W)=\mathbb{E}[Y \mid X, W]$ and $h(X, W)=\mathbb{E}[T \mid X, W]$, forms residuals $Y_{\mathrm{res}}=Y-f(X,W)$ and $T_{\mathrm{res}}=T-h(X, W)$, and then relates $Y_{\mathrm{res}}$ to $T_{\mathrm{res}}$. Because this score is Neyman-orthogonal and is typically implemented with cross-fitting, small errors in $f$ and $h$ do not induce first-order bias in $\theta(X)$.
+
+The identifying algebra in Model 1 follows from linearity in $T$:
+
+```{=tex}
+\begin{align*}
+\mathbb{E}[Y \mid X, W]=\theta(X) \mathbb{E}[T \mid X, W]+g(X, W)=\theta(X) h(X, W)+g(X, W)
+\end{align*}
+```
+
+so
+
+```{=tex}
+\begin{align*}
+Y_{\mathrm{res}}=Y-\mathbb{E}[Y \mid X, W]=\theta(X)(T-h(X, W))+v=\theta(X) T_{\mathrm{res}}+v
+\end{align*}
+```
+
+Thus regressing $Y_{\mathrm{res}}$ on $T_{\mathrm{res}}$ recovers $\theta(X)$ up to noise.
+
+In the on farm precision experiment (OFPE) setting, the ideas behind DML have shown promise for causal effect estimation. @kakimoto2022causal applied this framework to estimate heterogeneous treatment effects of nitrogen on yield, but their implementation was limited to a single-year experiment from one field and treated heterogeneity in a discrete way. They defined multiple “treatments” as increases from the lowest nitrogen rate to each higher rate, which is natural when there are only five or six fixed target rates per field. When data are pooled across fields with differing targets, however, applied nitrogen rates become effectively continuous, and the standard residualization of the treatment in DML does not extend cleanly to that setting.
+
+Consider the continuous-treatment setting, where the structural model is
+
+```{=tex}
+\begin{align*}
+Y=\theta(X, T)+g(X, W)+v
+\end{align*}
+```
+
+with $T$ (e.g., nitrogen rate) continuous, and $X$ heterogeneity-inducing covariates that interact with $T$ through the flexible response function $\theta(X, T)$. In this case double-orthogonalization fails because $\theta$ is a general (nonlinear and interaction-rich) function of $T$. Residualizing the treatment by replacing $T$ with $T-\mathbb{E}[T \mid X, W]$ does not produce a valid adjustment for the heterogeneous effect. Formally,
+
+```{=tex}
+\begin{align*}
+\theta(X, T)-\mathbb{E}[\theta(X, T) \mid X, W] \neq \theta(X, T-\mathbb{E}[T \mid X, W])
+\end{align*}
+```
+
+and the clean decomposition that underlies double-orthogonalization in the linear-in-$T$ case breaks down. 
+Instead, we apply single-orthogonalization (SO). We first estimate $f(X, W)=\mathbb{E}[Y \mid X, W]$ and form the residual $Y_{\mathrm{res}}=Y-f(X, W)$, and then recover $\theta(X, T)$ by flexibly modeling  $Y_{\mathrm{res}}$ as a function of $(X,T)$. This approach removes baseline variation due to $g(X,W)$ while preserving the full interaction structure between $X$ and the continuous treatment.
+
+To study and compare these ideas systematically, we adopt a single underlying structural model and then implement alternative orthogonalization schemes.
+
+The model of interest throughout is (Model 3)
 
 ```{=tex}
 \begin{align*}
@@ -41,29 +97,9 @@ y = f(X, N) + g(W) + v
 \end{align*}
 ```
 
+where $y$ is crop yield, $N$ is the continuous nitrogen rate, $X$ is a set of covariates that induce heterogeneity in the impact of $N$ on $y$, and $W$ is a set of covariates that affect $y$ but do not interact with $N$. 
+We implement three estimation strategies—double-orthogonalized, single-orthogonalized, and non-orthogonalized—that differ only in how (and whether) the outcome and treatment are residualized before the final fit. Orthogonalization means fitting a variable on its conditioning covariates and using the residual (observed minus predicted) so that the subsequent learner focuses on variation not explained by those covariates; all residualizations are performed with random forests. In the double-orthogonalized approach, both $y$ and $N$ are residualized with respect to $(X,W)$ and the final learner is trained on those residuals. In the single-orthogonalized approach, only $y$ is residualized and the raw $N$ is retained. The non-orthogonalized specification skips residualization entirely and fits the learner directly to $(y,N,X,W)$. For each strategy we consider three final-stage learners—neural networks (NN), random forests (RF), and causal forests (CF)—to evaluate how the orthogonalization scheme and learning algorithm interact in recovering heterogeneous nitrogen response.
 
-+ $y$: dependent variable
-+ $X$: set of covariates that induce heterogeneity in the impact of $N$ on $y$
-+ $W$: set of covariates that affect $y$, but not interactively with $N$
-+ $v$: the error term
-
-+ <span style = "color: blue;"> Start with non-orthogonalization approach. This is what is typically done in the literature (cite such papers). Talk about why this can be problematic like @kakimoto2022causal. They are not focused on causal impact identification, rather prediction of the level of the dependent variable. </span>
-
-+ <span style = "color: blue;"> Shift the attention to DML in the binary treatment context (introduce the idea of orthogonalization and why they are done, cite DML papers) as a way to identify causal impact (causal machine learning). </span>
-
-+ <span style = "color: blue;"> Our context is different because we have a continuous treatment variable. Introduce the idea of orthogonalization here and why SO can work but not DO because of interactions of the treatment variable with other covariates (heterogeneity-inducing variables). </span>
- 
-<span style = "color: blue;"> This is the end of the general discussion of different approaches we use.  </span>
-
-<span style = "color: blue;"> Next talk about individual approaches just like you are doing right now. Switch DO and SO sections (Start with SO). Expand on the DO-CF approaches and why it works even though it is DO (due to linear-in-parameter nature of the spline-based approach). </span>.
-
-We implement three estimation strategies—double‑orthogonalized, single‑orthogonalized, and non‑orthogonalized—that differ only in how (and whether) we orthogonalize the outcome and treatment before the final fit. Orthogonalization here means residualizing a variable by fitting it on all covariates and then taking the difference between the observed value and its prediction (we perform all residualizations using a random‑forest model). This ensures that our final model focuses on the component of variation that is not explained by the covariates.
-
-In the double‑orthogonalized approach, we first remove covariate effects from the outcome by predicting the outcome using all covariates and subtracting those predictions from the observed values. Next, we repeat this process for the treatment variable, yielding residuals that capture only the variation in treatment unexplained by covariates. The final learner is then trained on these two sets of residuals. By construction, the model estimates treatment effects using only the variation in outcome and treatment that is orthogonal to the covariates.
-
-The single‑orthogonalized method follows the same first step for the outcome but omits treatment residualization. After removing covariate effects from the outcome, we feed those outcome residuals—together with the original treatment values—into the final learner. This approach isolates covariate-driven patterns in the outcome while retaining the full treatment variation for effect estimation.
-
-In the non‑orthogonalized specification, we skip any residualization and directly fit the chosen learner to the original outcome and treatment (and covariates, where applicable). This allows us to assess the added value of orthogonalization. For each of these three strategies, we implement three different final‑stage learners—neural networks, random forests, and causal forests—to examine how both the orthogonalization scheme and the choice of algorithm influence our estimated treatment effects.
 
 The table below shows all the cases we consider.
 
@@ -92,82 +128,63 @@ flextable::save_as_image(f_est, here::here("writing/f_est.png"), res = 300)
 knitr::include_graphics(here::here("writing/f_est.png"))
 ```
 
-### Double-orthogonalized ANN (DO-ANN) and CF (DO-CF)
+### Single-orthogonalized NN (SO-NN) and (SO-RF)
 
-#### DO‑ANN
-
-In the DO‑ANN approach, we estimate the yield response function 
+In the single-orthogonalized framework only the baseline component $g(W)$ is partialed out before the final-stage estimation; the continuous treatment $N$ and heterogeneity-inducing covariates $X$ remain in their original form. Formally, starting from Model 3, we first estimate $g(W)=\mathbb{E}[y \mid W]$ using a cross-fitted random forest and form the residualized outcome
 
 ```{=tex}
 \begin{align*}
-\hat{y}=\hat{f}(N: X)
+\tilde{y}=y-\widehat{g}(W)
 \end{align*}
 ```
 
-using a structured neural network within a double‑machine‑learning (R‑learner) framework. Here $X$ represents observable soil and field characteristics that vary within a field in a spatially correlated manner and govern how yield responds to the nitrogen rate $N$.
-First, we orthogonalize both the outcome and the treatment basis variables by fitting each on all covariates $X$ (using cross‑fitted random forests) and taking residuals. For the treatment, we decompose the nitrogen rate into three basis functions and residualize each to obtain $\tilde{T}_1, \tilde{T}_2, \tilde{T}_3$. For the outcome, we similarly compute $Y-\hat{g}(X)$. Here $\hat{g}(X)$ denotes the predicted yield given covariates.
-The neural network itself has three parallel branches. Each branch processes the covariate vector $X$ through a feed‑forward network $f_k(X)$ and multiplies the output by the corresponding residualized treatment basis $\tilde{T}_k$. Summing these branch outputs yields the predicted yield
+The second stage fits a flexible model of $\tilde{y}$ on $(X,N)$ to recover the heterogeneous response function $f(X,N)$. The distinction between SO-NN and SO-RF is only in the choice of the final learner: SO-NN uses a neural network, while SO-RF uses a random forest. In both cases the learner estimates $\hat{f}(X, N)$, which is then used to predict yield under candidate nitrogen rates. Marginal profit is computed over a grid of $N$ values and the economically optimal nitrogen rate is selected as the one that maximizes 
 
 ```{=tex}
 \begin{align*}
-\hat{y}_i(N)=\sum_{k=1}^3 f_k\left(X_i\right) \tilde{T}_{k, i}
+\widehat{\mathrm{EONR}}=\arg \max _N\left[P_{\text {Corn }} \times \hat{f}(X, N)-P_N \times N\right]
 \end{align*}
 ```
+where $P_{\text {Corn }}$ is the corn price, $P_{\text {N }}$ is the nitrogen price, and $\hat{f}$ is the estimated yield response.
 
-so that $\hat{f}$ maps any nitrogen rate $N$ (via its basis representation) and covariates $X$ to a yield estimate. Once trained, we obtain economically optimal nitrogen rates (EONR) by evaluating $\hat{f}$ on a grid of $N$ values for each observation $i$, computing the marginal profit
-
-```{=tex}
-\begin{align*}
-\operatorname{MP}\left(N ; X_i\right)=P_{\text {corn }} \times \hat{y}_i(N)-P_N \times N
-\end{align*}
-```
-
-and selecting the $N$ that maximizes profit function (where $P_{\text {corn }}$ is the market price of corn and $P_{\text {N }}$ is the per‑unit cost of nitrogen. This grid‑search procedure is applied separately to each field in the test set to generate site‑specific EONR estimates.
+### Double-orthogonalized CF (DO-CF) and ANN (DO-ANN) 
 
 #### DO‑CF (continuous)
 
-The DO‑CF specification follows the same double‑orthogonalization steps as DO‑ANN, but replace the neural network with a causal forest for the final estimation. 
-We specify the CF model
+To adapt double-orthogonalization to the model of interest (Model 3), we estimate the heterogeneous response $f(X,N)$ by expanding the continuous treatment $N$ in a set of spline basis functions and allowing their coefficients to vary with the heterogeneity-inducing covariates $X$:
 
 ```{=tex}
 \begin{align*}
-Y=\sum_{k=1}^K \theta_k(X) \cdot S_k(N)+g(X)+v
+y=\sum_{k=1}^K \theta_k(X) S_k(N)+g(X, W)+v
 \end{align*}
 ```
 
-where 
-$Y$ is corn yield, $S_k(N)$ the $k$ th treatment basis function, and $g(X)$ the nuisance component. Following the double‑orthogonalization procedure, we first residualize $Y$ on $X$ by cross‑fitting a random forest regression to obtain $\tilde{Y}=Y-\widehat{g}(X)$. Next, we residualize each treatment basis $S_k(N)$ on $X$ in the same manner to produce $\tilde{S}_k=S_k(N)-\widehat{m}_k(X)$ for $k=1, \ldots, K$, where $\widehat{m}_k(X)$ is the cross-fitted prediction of the $k$ th basis function from covariates $X$. 
-Let the orthogonalized outcome and treatment basis variables be denoted as $\tilde{Y}$ and $\tilde{S}_k(N)$ respectively. The final stage fits a causal forest to the residualized data by solving the following minimization problem:
+Although double-orthogonalization generally fails when $f(X,N)$ is an arbitrary nonlinear function of $N$, this spline-based formulation restores the key linear-in-parameter structure that makes DO valid, because the model is linear in the transformed treatment basis $\left\{S_k(N)\right\}$. Residualizing each basis component and the outcome with respect to $(X,W)$ then yields a clean decomposition analogous to the linear-in-$T$ case. Let $\widetilde{S}_k(N)=S_k(N)-\mathbb{E}\left[S_k(N) \mid X, W\right]$. Then
 
 ```{=tex}
 \begin{align*}
-\operatorname{Min} \sum_{i=1}^N\left[\tilde{Y}_i-\sum_{k=1}^K \theta_k\left(X_i\right) \cdot \tilde{S}_k\left(N_i\right)\right]^2
+\tilde{y}=y-\mathbb{E}[y \mid X, W]=\sum_{k=1}^K \theta_k(X) \widetilde{S}_k(N)+v,
 \end{align*}
 ```
-Once the functions $\theta_k(X)$ are estimated, we recover the predicted yield response for any nitrogen rate $N$ and covariates $X$ as 
+
+so causal forest can nonparametrically estimate each heterogeneous weight $\theta_k(X)$  by relating the residualized outcome to the residualized spline bases. This Neyman-orthogonal (R-learner) style decomposition preserves the ability to capture complex, heterogeneous, and nonlinear treatment effects while inheriting the robustness of double-orthogonalization: small errors in the nuisance fits for $g(X,W)$ or the conditional means of the bases do not induce first-order bias in $\theta_k(X)$. The estimated $\theta_k(X)$ then combine to recover the full heterogeneous response function and, by differencing across candidate $N$ values, site-specific treatment effects and economically optimal nitrogen rates.
+
+#### DO‑ANN
+
+The DO-ANN follows the same double-orthogonalized, linear-in-basis logic as DO-CF, adapted to the Model 3. Starting from the residualized outcome $\tilde{y}$, the continuous treatment $N$ is expanded into spline basis functions and each basis is orthogonalized with respect to $(X,W)$; these orthogonalized spline bases are $T_1, T_2, T_3$. The model assumes 
 
 ```{=tex}
 \begin{align*}
-\hat{Y}(N: X)=\sum_{k=1}^K \hat{\theta}_k(X) \cdot S_k(N)
+\tilde{y} \approx \theta_1(X) T_1+\theta_2(X) T_2+\theta_3(X) T_3,
 \end{align*}
 ```
 
-As before, we perform a grid search over a sequence of $N$ values to identify the profit-maximizing N rate.
-
-### Single-orthogonalized NN (SO-NN) and (SO-RF)
-
-In the single‑orthogonalized framework, only the outcome is residualized prior to the final-stage estimation, while the treatment variable remains in its original form. Specifically, we estimate the yield response function $\hat{Y}=\hat{f}(X, N)$.
-The first step involves orthogonalizing the outcome variable by cross-fitting a RF regression of $Y$ oN $X$ yielding residualized outcomes $\tilde{Y}$. In the second stage, the residualized outcome $\tilde{Y}$ is regressed on both $X$ and $N$ simultaneously, using a nonparametric learner. The treatment variable is not decomposed into basis functions, and no orthogonalization is applied to it. 
-The difference between SO‑NN and SO‑RF lies in the choice of final learner: SO‑NN uses a neural network, while SO‑RF uses a random forest. In both cases, the model learns the mapping $\hat{f}(N: X)$ and is then used to predict yield responses over a grid of nitrogen rates. As in previous approaches, we compute the marginal profit for each candidate rate and select the nitrogen rate that maximizes this function.
-
-
+so that each $\theta_k(X)$ is the heterogeneous weight on the corresponding orthogonalized spline component of $N$. The key difference from DO-CF is the estimator for the coefficient functions $\theta_k(X)$: in DO-CF these are learned nonparametrically via causal forests, whereas in DO-ANN they are approximated by three separate neural-network branches, each producing a scalar weight that multiplies one of the $T_k$; the branch outputs are summed to produce the predicted residual. Because the decomposition is linear in the orthogonalized spline bases, the same clean double-orthogonalization justification applies, and the learned branch outputs recover the heterogeneous response without introducing first-order bias from the nuisance fits. The combined output reconstructs $\hat{f}(X, N)$, which is then used in the economic objective to compute the EONR.
 
 
 ### Non-orthogonalized ANN (NO-NN) and RF (NO-RF)
 
 In the non‑orthogonalized setting, neither the outcome variable nor the treatment is residualized prior to estimation. Instead, the model directly fits the observed yield on both the nitrogen rate and covariates. We estimate the response function $\hat{Y}=\hat{f}(X, N)$ using the original values of $Y$, $N$ and $X$, without any orthogonalization. As in the single‑orthogonalized approaches, the function $\hat{f}(X, N)$ is estimated non‑parametrically. The difference between NO‑NN and NO‑RF lies in the choice of final-stage learner: NO‑NN uses a neural network, while NO‑RF relies on a random forest. Once the yield response function is estimated, the EONR is determined using the same profit-maximization procedure described in earlier models.
-
-
 
 
 ## Performance Measurement
