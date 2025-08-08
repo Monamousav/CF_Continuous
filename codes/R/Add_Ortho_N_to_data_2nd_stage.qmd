@@ -1,0 +1,127 @@
+---
+title: "Add N_tilde to the data_2nd_stage (<span style='color:blue'>Score: /10 </span>)"
+author: "Your Name Here"
+format:
+  html:
+    number-sections: true
+    number-depth: 1
+    theme: flatly
+    toc: true
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+# Load data
+```{r setup_not_remove, echo=FALSE, include = F}
+
+data_2nd_stage <- readRDS("/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous/data/data_20230504/data_2nd_stage.rds")
+evall_N_seq <- readRDS("/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous/data/data_20230504/evall_N_seq.rds")
+
+```
+
+
+# Fit a RF
+```{r setup_not_remove, echo=FALSE, include = F}
+
+library(randomForest)
+
+# fitting a RF to predict N from Nk, plateau, and b0
+
+# rf_mod <- randomForest(
+#   N ~ Nk + plateau + b0,
+#   data = data_2nd_stage,
+#   ntree = 100
+# )
+
+if (!requireNamespace("ranger", quietly = TRUE)) install.packages("ranger")
+library(ranger)
+
+rf_mod <- ranger(
+  formula = N ~ Nk + plateau + b0,
+  data    = data_2nd_stage,
+  num.trees     = 100,       # or fewer if you like
+  #mtry          = 2,         # smaller default than sqrt(p)
+  min.node.size = 5,         # larger to speed up
+  num.threads   = parallel::detectCores()
+)
+
+
+```
+
+# add N_tilde to the data
+```{r setup_not_remove, echo=FALSE, include = F}
+
+# # Compute the predicted (fitted) values
+# fitted_N <- predict(rf_mod, newdata = data_2nd_stage)
+# 
+# # Add the residualized treatment to the data 
+# data_2nd_stage$N_tilde <- data_2nd_stage$N - fitted_N
+
+
+data_2nd_stage$fitted_N <- predict(rf_mod, data = data_2nd_stage)$predictions
+data_2nd_stage$N_tilde  <- data_2nd_stage$N - data_2nd_stage$fitted_N
+
+
+```
+
+
+
+# save data_2nd_stage with N_tilde
+```{r setup_not_remove, echo=FALSE, include = F}
+output_dir <- "/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous/data/data_20230504"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+saveRDS(data_2nd_stage,
+        file = file.path(output_dir, "data_2nd_stage.rds"))
+
+```
+
+
+# add N_tilde seq to the eval_N_seq data
+```{r setup_not_remove, echo=FALSE, include = F}
+library(dplyr)
+
+# Step 1: Create a sequence of 100 N_tilde values per sim
+ntilde_seq <- data_2nd_stage %>%
+  group_by(sim) %>%
+  summarise(N_tilde = list(seq(min(N_tilde), max(N_tilde), length.out = 100))) %>%
+  unnest(N_tilde)
+
+# Step 2: Bind the new N_tilde column to evall_N_seq by sim
+evall_N_seq <- evall_N_seq %>%
+  arrange(sim) %>%
+  group_by(sim) %>%
+  mutate(row = row_number()) %>%
+  ungroup()
+
+ntilde_seq <- ntilde_seq %>%
+  group_by(sim) %>%
+  mutate(row = row_number()) %>%
+  ungroup()
+
+evall_N_seq <- evall_N_seq %>%
+  left_join(ntilde_seq, by = c("sim", "row")) %>%
+  select(-row)
+
+
+
+```
+
+# save eval_N_seq data with N_Tilde seq
+
+```{r setup_not_remove, echo=FALSE, include = F}
+output_dir <- "/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous/data/data_20230504"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+saveRDS(evall_N_seq,
+        file = file.path(output_dir, "evall_N_seq.rds"))
+
+```
+
+
