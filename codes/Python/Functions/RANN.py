@@ -13,17 +13,33 @@ from sklearn.preprocessing import StandardScaler
 # %%
 # === MODEL 1: RANN ===
 def train_rann_model_from_splits(data_2nd_stage, evall_N_seq, split_csv_path, folder_name, device):
+    #class MyModel(nn.Module):
+        #def __init__(self):
+            #super(MyModel, self).__init__()
+            #self.branch1 = nn.Sequential(nn.Linear(3, 64), nn.ReLU(), nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, 1))
+            #self.branch2 = nn.Sequential(nn.Linear(3, 64), nn.ReLU(), nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, 1))
+            #self.branch3 = nn.Sequential(nn.Linear(3, 64), nn.ReLU(), nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, 1))
+
+        #def forward(self, inp):
+            #x = inp[:, :3]
+            #T = inp[:, 3:]
+            #return self.branch1(x)*T[:,0:1] + self.branch2(x)*T[:,1:2] + self.branch3(x)*T[:,2:3]
     class MyModel(nn.Module):
         def __init__(self):
             super(MyModel, self).__init__()
-            self.branch1 = nn.Sequential(nn.Linear(3, 64), nn.ReLU(), nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, 1))
-            self.branch2 = nn.Sequential(nn.Linear(3, 64), nn.ReLU(), nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, 1))
-            self.branch3 = nn.Sequential(nn.Linear(3, 64), nn.ReLU(), nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, 1))
+            # single branch for the 3 covariates
+            self.branch = nn.Sequential(
+                nn.Linear(3, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+                nn.Linear(64, 1)
+            )
 
         def forward(self, inp):
-            x = inp[:, :3]
-            T = inp[:, 3:]
-            return self.branch1(x)*T[:,0:1] + self.branch2(x)*T[:,1:2] + self.branch3(x)*T[:,2:3]
+           x = inp[:, :3]     # Nk, plateau, b0
+           n = inp[:, 3:4]    # N_tilde
+           return self.branch(x) * n        
 
     # Define root results directory and build the full output path
     base_results_dir = os.path.join(os.getcwd(), 'results')
@@ -40,7 +56,8 @@ def train_rann_model_from_splits(data_2nd_stage, evall_N_seq, split_csv_path, fo
         test_id = row['test_id']
         train_ids = row[[col for col in row.index if col.startswith('train_')]].values
         dataset = data_2nd_stage[data_2nd_stage['sim'].isin(train_ids)].reset_index(drop=True)
-        dataset = dataset[['y_tilde', 'Nk', 'plateau', 'b0', 'T_1_tilde', 'T_2_tilde', 'T_3_tilde']]
+        #dataset = dataset[['y_tilde', 'Nk', 'plateau', 'b0', 'T_1_tilde', 'T_2_tilde', 'T_3_tilde']]
+        dataset = dataset[['y_tilde', 'Nk', 'plateau', 'b0', 'N_tilde']]
         train_dataset = dataset.sample(frac=0.8, random_state=0)
         val_dataset = dataset.drop(train_dataset.index)
 
@@ -97,8 +114,10 @@ def train_rann_model_from_splits(data_2nd_stage, evall_N_seq, split_csv_path, fo
         for i in range(len(features)):
             base = features.iloc[[i]]
             repeated = pd.concat([base]*100, ignore_index=True)
-            full_feat = pd.concat([repeated, eval_seq[['T_1', 'T_2', 'T_3']]], axis=1)
-            full_feat.columns = ['Nk', 'plateau', 'b0', 'T_1_tilde', 'T_2_tilde', 'T_3_tilde']
+            #full_feat = pd.concat([repeated, eval_seq[['T_1', 'T_2', 'T_3']]], axis=1)
+            full_feat = pd.concat([repeated, eval_seq[['N_tilde']]], axis=1)
+            #full_feat.columns = ['Nk', 'plateau', 'b0', 'T_1_tilde', 'T_2_tilde', 'T_3_tilde']
+            full_feat.columns = ['Nk', 'plateau', 'b0', 'N_tilde']
             X_test = torch.tensor(scaler.transform(full_feat), dtype=torch.float32).to(device)
             with torch.no_grad():
                 pred = model(X_test).cpu().numpy().flatten()
