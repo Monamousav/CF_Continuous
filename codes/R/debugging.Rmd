@@ -1,0 +1,244 @@
+# Objectives
+
++ Test whether python codes for estimating R-learner models are working properly using a dataset following a simple data generating process
+
++ Test whether spline approach (based on the `mgcv` package) is working properly
+ 
+# Preparation
+
+## Packages and functions
+```{r}
+#--- packages ---#
+library(tidyverse)
+library(data.table)
+library(mgcv)
+library(spatialsample)
+library(parallel)
+library(sf)
+library(grf)
+library(ranger)
+library(xgboost)
+library(mgcv)
+#library(here)
+#library(reticulate)
+library(readr)
+library(dplyr)
+library(tidyr)
+
+
+Sys.setenv(
+  OMP_NUM_THREADS = "1",
+  OPENBLAS_NUM_THREADS = "1",
+  MKL_NUM_THREADS = "1",
+  VECLIB_MAXIMUM_THREADS = "1"  # macOS Accelerate safeguard
+)
+
+library(reticulate)
+use_condaenv("cf_conda311", required = TRUE)
+py_config()
+
+
+py_run_string("
+import platform, numpy as np, sklearn, scipy, econml
+print('arch:', platform.machine())
+print('numpy:', np.__version__)
+print('sklearn:', sklearn.__version__)
+print('scipy:', scipy.__version__)
+print('econml:', econml.__version__)
+")
+
+# make sure Python can see the folder that contains run_CF_c.py
+py_run_string("import sys, os; sys.path.append('/Users/mmousavi2/Dropbox/Causal_climate/My_own_Shared/Causal-ML-continuous-treatment/codes/Python')")
+
+# clear any stale bytecode that might have been written under a different toolchain
+system("find /Users/mmousavi2/Dropbox/Causal_climate/My_own_Shared/Causal-ML-continuous-treatment/codes/Python -name '__pycache__' -type d -prune -exec rm -rf {} +")
+
+# now import without executing R helpers:
+py_run_string("import run_CF_c; print('run_CF_c imported OK; has run_CF_c_py:', hasattr(run_CF_c, 'run_CF_c_py'))")
+
+#--- python functions ---#
+# use_condaenv("cf_conda311", required = TRUE)
+# py_config()
+# py_run_string("from econml.dml import CausalForestDML; print('CausalForestDML imported OK')")
+source_python("/Users/mmousavi2/Dropbox/Causal_climate/My_own_Shared/Causal-ML-continuous-treatment/codes/Python/run_CF_c.py")
+```
+
+## Data
+
+
+```{r}
+all_data <- raw_sim_data
+
+test_sim_id=1
+
+split_row     <- train_test_splits_10fields[train_test_splits_10fields$test_id == test_sim_id, ]
+train_sim_ids <- as.integer(unlist(split_row[paste0("train_", 1:10)]))
+
+sim_id_ls     <- c(train_sim_ids, test_sim_id)
+
+    # assemble train & test data
+    data <- raw_sim_data$reg_data[[1]] %>%
+      .[sim %in% sim_id_ls, ] %>%
+      .[, .(sim, data)] %>%
+      unnest(cols = c(data)) %>%
+      data.table()
+
+    train_data <- data[sim != test_sim_id, ]
+    
+    # aunit level
+    test_data  <- raw_sim_data$reg_data[[1]] %>%
+      .[sim == test_sim_id, ] %>%
+      .[, .(sim, data)] %>%
+      unnest(cols = c(data)) %>%
+      data.table()
+
+    # cell level
+  # test_data <-
+  # all_data$field_pars[[1]] %>%
+  # .[sim == test_sim_id, ]
+
+```
+
+# Train CF
+
+```{r, eval = FALSE}
+x_vars <- c("Nk", "plateau", "b0")
+# x_vars <-
+#   c(
+#     "b0_1", "b0_2",
+#     "b1_2_1", "b1_2_2", "b1_1_1", "b1_1_2",
+#     # "b2_2_1", "b2_2_2", "b2_1_1", "b2_1_2",
+#     "Nk_2_1", "Nk_2_2", "Nk_1_1", "Nk_1_2",
+#     "plateau_2_1", "plateau_2_2", "plateau_1_1", "plateau_1_2"
+#     # "theta_plateau_2", "theta_Nk_2", "theta_b0_2"
+#   )
+
+T_info <- prepare_T_mat(formula(yield ~ s(N, k = 4), m = 2), data = train_data)
+Y <- train_data[, yield]
+X <- train_data[, ..x_vars] %>% as.matrix()
+W <- X
+X_test <- test_data[, ..x_vars] %>% as.matrix()
+
+te_hat_cf <- run_CF_c_py(Y, T_info$T_sp, X, W, n_estimators = 2000)
+
+te_info <- get_te(te_hat_cf, test_data, x_vars, "aunit_id")
+#te_info <- get_te(te_hat_cf, test_data, x_vars, "cell_id")
+
+T_seq <- train_data[, seq(min(N), max(N), length = 200)]
+
+response_data <- find_response_semi(T_seq, T_info, te_info)
+
+saveRDS(list(te_hat_cf = te_hat_cf, te_info = te_info, T_seq = T_seq, response_data = response_data, test_data = test_data, train_data = train_data), "/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous/results/Test_CF_any_mis/cf-continuous-unit_10_fields_double_check.rds")
+```
+
+# Post-estimation analysis
+```{r}
+cf_results <- readRDS("/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous/results/Test_CF_any_mis/cf-continuous-unit_10_fields_double_check.rds")
+```
+
+## Site-specific EONR
+
+```{r}
+pCorn <- 6.25 / 25.4 # $/kg
+pN <- 1 / 0.453592 # $/kg
+
+# aunit id ###############################
+ss_eonr <-
+  cf_results$response_data %>%
+  .[, profit := est * pCorn - pN * T] %>%
+  .[, .SD[which.max(profit), ], by = aunit_id] %>%
+  .[, .(aunit_id, T)] %>%
+  setnames("T", "opt_N_hat")
+
+true_ss_eonr <-
+  cf_results$test_data[, .(aunit_id, b0, b1, b2, Nk)] %>%
+  .[, opt_N := (pN / pCorn - b1) / (2 * b2)] %>%
+  .[, opt_N := pmin(Nk, opt_N)] %>%
+  .[, opt_N := pmax(0, opt_N)] %>%
+  .[, .(aunit_id, opt_N)]
+
+combined_eonr <- ss_eonr[true_ss_eonr, on = "aunit_id"]
+
+combined_eonr[, cor(opt_N, opt_N_hat)]
+
+############################################################################
+
+# cell ###########################
+# ss_eonr <-
+#   cf_results$response_data %>%
+#   .[, profit := est * pCorn - pN * T] %>%
+#   .[, .SD[which.max(profit), ], by = cell_id] %>%
+#   .[, .(cell_id, T)] %>%
+#   setnames("T", "opt_N_hat")
+#  
+#  true_ss_eonr <-
+#   cf_results$test_data[, .(cell_id, b0, b1, b2, Nk)] %>%
+#   .[, opt_N := (pN / pCorn - b1) / (2 * b2)] %>%
+#   .[, opt_N := pmin(Nk, opt_N)] %>%
+#   .[, opt_N := pmax(0, opt_N)] %>%
+#   .[, .(cell_id, opt_N)]
+#  
+# combined_eonr <- ss_eonr[true_ss_eonr, on = "cell_id"]
+
+#combined_eonr[, cor(opt_N, opt_N_hat)]
+
+
+
+#######################################################################################
+
+
+rmse_10_fields_unit <- sqrt(mean((combined_eonr$opt_N_hat - combined_eonr$opt_N)^2, na.rm = TRUE))  
+rmse_10_fields_unit
+```
+
+# dependency functions
+```{r}
+prepare_T_mat <- function(gam_formula, data) {
+  gam_setup <- gam(gam_formula, data = data)
+  T_var_name <- all.vars(gam_formula)[2]
+  T_sp <- predict(gam_setup, data = data, type = "lpmatrix") %>%
+    .[, -1] %>%
+    data.table() %>%
+    setnames(names(.), paste0("T_", 1:ncol(.)))
+  return(list(gam_setup = gam_setup, T_sp = T_sp, T_var_name = T_var_name))
+}
+
+
+################################################################################
+# aunit
+
+get_te <- function(trained_model, test_data, x_vars, id_var = "aunit_id") {
+  X_test <- test_data[, ..x_vars] %>% as.matrix()
+  te_hat <- trained_model$const_marginal_effect(X_test)
+  return(list(te_hat = data.table(te_hat), id_data = test_data[, ..id_var]))
+}
+
+# cell
+
+# get_te <- function(trained_model, test_data, x_vars, id_var = "cell_id") {
+#   X_test <- test_data[, ..x_vars] %>% as.matrix()
+#   te_hat <- trained_model$const_marginal_effect(X_test)
+#   return(list(te_hat = data.table(te_hat), id_data = test_data[, ..id_var]))
+# }
+################################################################################
+find_response_semi <- function(T_seq, T_info, te_info) {
+  eval_T <- data.table(T = T_seq) %>%
+    setnames("T", T_info$T_var_name) %>%
+    predict(T_info$gam_setup, newdata = ., type = "lpmatrix") %>%
+    .[, -1] %>%
+    data.table()
+  
+  curv_data <- as.matrix(te_info$te_hat) %*% t(as.matrix(eval_T)) %>%
+    data.table() %>%
+    setnames(names(.), as.character(T_seq)) %>%
+    .[, id := 1:.N] %>%
+    melt(id.var = "id") %>%
+    setnames(c("variable", "value"), c("T", "est")) %>%
+    .[, T := as.numeric(as.character(T))]
+  
+  id_data <- te_info$id_data[, id := 1:.N]
+  final_data <- id_data[curv_data, on = "id"][, id := NULL]
+  return(final_data)
+}
+
+```
