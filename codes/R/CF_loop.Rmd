@@ -23,17 +23,11 @@ library(tidyr)
 #   fs::dir_ls(., full.names = TRUE) %>%
 #   lapply(source)
 
-
-
-
-
 use_virtualenv("cf_env311", required = TRUE)
 Sys.setenv(DYLD_LIBRARY_PATH = "/opt/homebrew/Cellar/llvm@15/15.0.7/lib/c++")
-py_config()  
+py_config()
 
 source_python("/Users/monamousavi/Dropbox/Causal_climate/My_own_Shared/Causal-ML-continuous-treatment/codes/Python/run_CF_c.py")
-
-
 ```
 
 
@@ -43,24 +37,22 @@ source_python("/Users/monamousavi/Dropbox/Causal_climate/My_own_Shared/Causal-ML
 # CF loop
 
 ```{r}
-
 ## ───────────────────────────────────────
 train_test_splits <- train_test_splits_1fields
-n_fields <- 1  # how many train sims 
+n_fields <- 1 # how many train sims
 
 ## ── Output paths ──────────────────────────
-output_dir   <- "/Users/monamousavi/Dropbox/CF_res_1"
+output_dir <- "/Users/monamousavi/Dropbox/CF_res_1"
 dir.create(path.expand(output_dir), recursive = TRUE, showWarnings = FALSE)
 progress_csv <- file.path(output_dir, "progress.csv")
 
 ## ─  keep an in-memory list ────────────
-#cf_all_results <- vector("list", length = nrow(train_test_splits))
-#names(cf_all_results) <- train_test_splits$test_id
-train_test_splits <- subset(train_test_splits, !test_id %in% as.integer(sub("^sim_(\\d+)\\.rds$","\\1", basename(list.files(path.expand(output_dir), "^sim_\\d+\\.rds$")))))
+# cf_all_results <- vector("list", length = nrow(train_test_splits))
+# names(cf_all_results) <- train_test_splits$test_id
+train_test_splits <- subset(train_test_splits, !test_id %in% as.integer(sub("^sim_(\\d+)\\.rds$", "\\1", basename(list.files(path.expand(output_dir), "^sim_\\d+\\.rds$")))))
 
 ## ── Loop over test sims ───────────────────────────────────────────────────────
 for (i in seq_len(nrow(train_test_splits))) {
-
   test_sim_id <- train_test_splits$test_id[i]
   out_fn <- file.path(output_dir, sprintf("sim_%03d.rds", as.integer(test_sim_id)))
 
@@ -70,175 +62,174 @@ for (i in seq_len(nrow(train_test_splits))) {
     next
   }
 
-  # 
-  tryCatch({
+  #
+  tryCatch(
+    {
+      ## 1) Train/test IDs
+      split_row <- train_test_splits[i, ]
+      train_sim_ids <- as.integer(unlist(split_row[paste0("train_", 1:n_fields)]))
+      sim_id_ls <- c(train_sim_ids, test_sim_id)
 
-    ## 1) Train/test IDs
-    split_row     <- train_test_splits[i, ]
-    train_sim_ids <- as.integer(unlist(split_row[paste0("train_", 1:n_fields)]))
-    sim_id_ls     <- c(train_sim_ids, test_sim_id)
+      ## 2) train & test data
+      data <- raw_sim_data$reg_data[[1]] %>%
+        .[sim %in% sim_id_ls, ] %>%
+        .[, .(sim, data)] %>%
+        tidyr::unnest(cols = c(data)) %>%
+        as.data.table()
 
-    ## 2) train & test data
-    data <- raw_sim_data$reg_data[[1]] %>%
-      .[sim %in% sim_id_ls, ] %>%
-      .[, .(sim, data)] %>%
-      tidyr::unnest(cols = c(data)) %>%
-      as.data.table()
+      train_data <- data[sim != test_sim_id, ]
+      test_data <- raw_sim_data$reg_data[[1]] %>%
+        .[sim == test_sim_id, ] %>%
+        .[, .(sim, data)] %>%
+        tidyr::unnest(cols = c(data)) %>%
+        as.data.table()
 
-    train_data <- data[sim != test_sim_id, ]
-    test_data  <- raw_sim_data$reg_data[[1]] %>%
-      .[sim == test_sim_id, ] %>%
-      .[, .(sim, data)] %>%
-      tidyr::unnest(cols = c(data)) %>%
-      as.data.table()
+      ## 3)  CF
+      x_vars <- c("Nk", "plateau", "b0")
+      T_info <- prepare_T_mat(formula(yield ~ s(N, k = 4), m = 2), data = train_data)
+      Y <- train_data[, yield]
+      X <- as.matrix(train_data[, ..x_vars])
+      W <- X
+      X_test <- as.matrix(test_data[, ..x_vars])
 
-    ## 3)  CF
-    x_vars <- c("Nk", "plateau", "b0")
-    T_info <- prepare_T_mat(formula(yield ~ s(N, k = 4), m = 2), data = train_data)
-    Y      <- train_data[, yield]
-    X      <- as.matrix(train_data[, ..x_vars])
-    W      <- X
-    X_test <- as.matrix(test_data[, ..x_vars])
+      ## 4) Run CF in Python
+      Sys.setenv(
+        OMP_NUM_THREADS        = "1",
+        MKL_NUM_THREADS        = "1",
+        KMP_AFFINITY           = "disabled",
+        KMP_DUPLICATE_LIB_OK   = "TRUE"
+      )
 
-    ## 4) Run CF in Python
-    Sys.setenv(
-      OMP_NUM_THREADS        = "1",
-      MKL_NUM_THREADS        = "1",
-      KMP_AFFINITY           = "disabled",
-      KMP_DUPLICATE_LIB_OK   = "TRUE"
-    )
+      te_hat_cf <- run_CF_c_py(
+        Y,
+        T_info$T_sp,
+        X,
+        W,
+        n_estimators = 2000
+      )
+      te_info <- get_te(te_hat_cf, test_data, x_vars, "aunit_id")
 
-    te_hat_cf <- run_CF_c_py(
-      Y,
-      T_info$T_sp,
-      X,
-      W,
-      n_estimators = 2000
-    )
-    te_info <- get_te(te_hat_cf, test_data, x_vars, "aunit_id")
+      ## 5) Response curves
+      T_seq <- train_data[, seq(min(N), max(N), length = 200)]
+      response_data <- find_response_semi(T_seq, T_info, te_info)
 
-    ## 5) Response curves
-    T_seq <- train_data[, seq(min(N), max(N), length = 200)]
-    response_data <- find_response_semi(T_seq, T_info, te_info)
+      ## 6) Site-specific EONR
+      pCorn <- 6.25 / 25.4
+      pN <- 1 / 0.453592
 
-    ## 6) Site-specific EONR
-    pCorn <- 6.25 / 25.4
-    pN    <- 1 / 0.453592
+      ss_eonr <- response_data %>%
+        .[, profit := est * pCorn - pN * T] %>%
+        .[, .SD[which.max(profit), ], by = aunit_id] %>%
+        .[, .(aunit_id, opt_N_hat = T)]
 
-    ss_eonr <- response_data %>%
-      .[, profit := est * pCorn - pN * T] %>%
-      .[, .SD[which.max(profit), ], by = aunit_id] %>%
-      .[, .(aunit_id, opt_N_hat = T)]
+      true_ss_eonr <- test_data[, .(aunit_id, b0, b1, b2, Nk)] %>%
+        .[, opt_N := (pN / pCorn - b1) / (2 * b2)] %>%
+        .[, opt_N := pmin(Nk, opt_N)] %>%
+        .[, opt_N := pmax(0, opt_N)] %>%
+        .[, .(aunit_id, opt_N)]
 
-    true_ss_eonr <- test_data[, .(aunit_id, b0, b1, b2, Nk)] %>%
-      .[, opt_N := (pN / pCorn - b1) / (2 * b2)] %>%
-      .[, opt_N := pmin(Nk, opt_N)] %>%
-      .[, opt_N := pmax(0, opt_N)] %>%
-      .[, .(aunit_id, opt_N)]
+      combined_eonr <- ss_eonr[true_ss_eonr, on = "aunit_id"]
+      corr_val <- combined_eonr[, cor(opt_N, opt_N_hat)]
 
-    combined_eonr <- ss_eonr[true_ss_eonr, on = "aunit_id"]
-    corr_val      <- combined_eonr[, cor(opt_N, opt_N_hat)]
+      ## 7) Package result for THIS sim
+      res <- list(
+        te_hat_cf     = te_hat_cf,
+        te_info       = te_info,
+        T_seq         = T_seq,
+        response_data = response_data,
+        test_data     = test_data,
+        train_data    = train_data,
+        combined_eonr = combined_eonr,
+        corr          = corr_val
+      )
 
-    ## 7) Package result for THIS sim
-    res <- list(
-      te_hat_cf     = te_hat_cf,
-      te_info       = te_info,
-      T_seq         = T_seq,
-      response_data = response_data,
-      test_data     = test_data,
-      train_data    = train_data,
-      combined_eonr = combined_eonr,
-      corr          = corr_val
-    )
+      #  keep in memory too
+      # cf_all_results[[as.character(test_sim_id)]] <- res
 
-    #  keep in memory too
-    #cf_all_results[[as.character(test_sim_id)]] <- res
+      ## 8) SAVE THIS SIM IMMEDIATELY
+      tmp_fn <- paste0(out_fn, ".tmp")
+      saveRDS(res, tmp_fn, compress = "xz")
+      file.rename(tmp_fn, out_fn)
 
-    ## 8) SAVE THIS SIM IMMEDIATELY 
-    tmp_fn <- paste0(out_fn, ".tmp")
-    saveRDS(res, tmp_fn, compress = "xz")
-    file.rename(tmp_fn, out_fn)
+      ## 9) Log progress
+      prog <- data.frame(
+        test_sim_id = test_sim_id,
+        corr        = corr_val,
+        n_train     = nrow(train_data),
+        saved_file  = out_fn,
+        ts          = as.character(Sys.time())
+      )
+      write.table(
+        prog,
+        file      = progress_csv,
+        sep       = ",",
+        row.names = FALSE,
+        col.names = !file.exists(progress_csv),
+        append    = TRUE
+      )
 
-    ## 9) Log progress
-    prog <- data.frame(
-      test_sim_id = test_sim_id,
-      corr        = corr_val,
-      n_train     = nrow(train_data),
-      saved_file  = out_fn,
-      ts          = as.character(Sys.time())
-    )
-    write.table(
-      prog,
-      file      = progress_csv,
-      sep       = ",",
-      row.names = FALSE,
-      col.names = !file.exists(progress_csv),
-      append    = TRUE
-    )
+      message(
+        "Finished sim ", test_sim_id, " → ", basename(out_fn),
+        " (corr = ", round(corr_val, 3), ")"
+      )
 
-    message("Finished sim ", test_sim_id, " → ", basename(out_fn),
-            " (corr = ", round(corr_val, 3), ")")
-
-    # Free RAM periodically
-    rm(res, te_hat_cf, te_info, response_data, train_data, test_data)
-    if (i %% 10 == 0) gc()
-
-  }, error = function(e) {
-    message("ERROR in sim ", test_sim_id, ": ", conditionMessage(e))
-    #  which sim failed
-    err_row <- data.frame(
-      test_sim_id = test_sim_id,
-      error       = conditionMessage(e),
-      ts          = as.character(Sys.time())
-    )
-    write.table(
-      err_row,
-      file      = file.path(output_dir, "errors.csv"),
-      sep       = ",",
-      row.names = FALSE,
-      col.names = !file.exists(file.path(output_dir, "errors.csv")),
-      append    = TRUE
-    )
-  })
-
+      # Free RAM periodically
+      rm(res, te_hat_cf, te_info, response_data, train_data, test_data)
+      if (i %% 10 == 0) gc()
+    },
+    error = function(e) {
+      message("ERROR in sim ", test_sim_id, ": ", conditionMessage(e))
+      #  which sim failed
+      err_row <- data.frame(
+        test_sim_id = test_sim_id,
+        error       = conditionMessage(e),
+        ts          = as.character(Sys.time())
+      )
+      write.table(
+        err_row,
+        file      = file.path(output_dir, "errors.csv"),
+        sep       = ",",
+        row.names = FALSE,
+        col.names = !file.exists(file.path(output_dir, "errors.csv")),
+        append    = TRUE
+      )
+    }
+  )
 }
 
 ## ── save the whole list at the end ─────────────────────────────────
 # saveRDS(cf_all_results, file.path(output_dir, "_all_results.rds"))
-
-
 ```
+
 # read in
 
 ```{r}
 library(data.table)
 
-in_dir   <- "/Users/monamousavi/Dropbox/CF_res_1"         # where current sim_###.rds live
-out_dir  <- "~/Desktop/CF_res_1_eonr"    # new lean outputs
+in_dir <- "/Users/monamousavi/Dropbox/CF_res_1" # where current sim_###.rds live
+out_dir <- "~/Desktop/CF_res_1_eonr" # new lean outputs
 dir.create(path.expand(out_dir), recursive = TRUE, showWarnings = FALSE)
 
-files  <- list.files(path.expand(in_dir), pattern = "^sim_\\d+\\.rds$", full.names = TRUE)
+files <- list.files(path.expand(in_dir), pattern = "^sim_\\d+\\.rds$", full.names = TRUE)
 sim_id <- as.integer(sub("^.*sim_(\\d+)\\.rds$", "\\1", files))
 
 for (i in seq_along(files)) {
-  r <- readRDS(files[i])  # don't View(); just extract the piece we need
+  r <- readRDS(files[i]) # don't View(); just extract the piece we need
   e <- as.data.table(r$combined_eonr)[, .(aunit_id, opt_N_hat, opt_N)]
   e[, sim := sim_id[i]]
   setcolorder(e, c("aunit_id", "opt_N_hat", "opt_N", "sim"))
 
   fn_rds <- file.path(out_dir, sprintf("sim_%03d_eonr.rds", sim_id[i]))
-  tmp    <- paste0(fn_rds, ".tmp")
+  tmp <- paste0(fn_rds, ".tmp")
   saveRDS(e, tmp, compress = "xz")
   file.rename(tmp, fn_rds)
 
   # optional CSV
-  #fwrite(e, sub("\\.rds$", ".csv", fn_rds))
+  # fwrite(e, sub("\\.rds$", ".csv", fn_rds))
 
   rm(r, e)
   if (i %% 50 == 0) gc()
 }
-
-
 ```
 
 

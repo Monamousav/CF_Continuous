@@ -18,11 +18,37 @@ library(grf)
 library(ranger)
 library(xgboost)
 library(mgcv)
-# library(here)
-library(reticulate)
+#library(here)
+#library(reticulate)
 library(readr)
 library(dplyr)
 library(tidyr)
+
+Sys.setenv(
+  OMP_NUM_THREADS = "1",
+  OPENBLAS_NUM_THREADS = "1",
+  MKL_NUM_THREADS = "1",
+  VECLIB_MAXIMUM_THREADS = "1"  # macOS Accelerate safeguard
+)
+
+library(reticulate)
+use_condaenv("cf_conda311", required = TRUE)
+py_config()
+
+
+py_run_string("import sys, os; sys.path.append('/Users/mmousavi2/Dropbox/Causal_climate/My_own_Shared/Causal-ML-continuous-treatment/codes/Python')")
+
+# clear any stale bytecode that might have been written under a different toolchain
+system("find /Users/mmousavi2/Dropbox/Causal_climate/My_own_Shared/Causal-ML-continuous-treatment/codes/Python -name '__pycache__' -type d -prune -exec rm -rf {} +")
+
+# now import without executing R helpers:
+py_run_string("import run_CF_c; print('run_CF_c imported OK; has run_CF_c_py:', hasattr(run_CF_c, 'run_CF_c_py'))")
+
+#--- python functions ---#
+# use_condaenv("cf_conda311", required = TRUE)
+# py_config()
+# py_run_string("from econml.dml import CausalForestDML; print('CausalForestDML imported OK')")
+source_python("/Users/mmousavi2/Dropbox/Causal_climate/My_own_Shared/Causal-ML-continuous-treatment/codes/Python/run_CF_c.py")
 
 
 #--- R functions ---#
@@ -37,33 +63,33 @@ py_config()
 py_run_string("from econml.dml import CausalForestDML; print('CausalForestDML imported OK')")
 source_python("/Users/mmousavi2/Dropbox/Causal_climate/My_own_Shared/Causal-ML-continuous-treatment/codes/Python/run_CF_c.py")
 ```
-
-
-
-```{r}
+```{r setup, include=FALSE}
 # project‐root path:
 proj_root <- "/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous"
 
-# “.here” file
+# ensure a `.here` exists at the project root (optional)
 here_file <- file.path(proj_root, ".here")
-if (!file.exists(here_file)) {
-  message("Creating .here in ", proj_root)
-  file.create(here_file)
-}
+if (!file.exists(here_file)) file.create(here_file)
 
+# turn off multi-threading
+Sys.setenv(OMP_NUM_THREADS = 1, MKL_NUM_THREADS = 1)
 
+# load here (no need to set root—see next chunk)
+library(here)
 ```
+
 
 ## Data
 
 ```{r}
-# turn off multi-threading
-Sys.setenv(OMP_NUM_THREADS = 1, MKL_NUM_THREADS = 1)
+# Data (use here() with absolute root to avoid any cached project root)
+rds_path <- here(proj_root, "data", "raw_sim_data.rds")
+if (!file.exists(rds_path)) stop("File not found: ", rds_path)
 
-# load data only once, then drop
-library(here)
-raw_sim_data <- readRDS(here("data", "raw_sim_data.rds"))
-rm(list = setdiff(ls(), c("raw_sim_data", "np", "run_CF_c_py", "gm_wrapper_functions_you_need")))
+raw_sim_data <- readRDS(rds_path)
+
+# keep memory tidy
+rm(list = setdiff(ls(), c("raw_sim_data", "np", "run_CF_c_py", "gm_wrapper_functions_you_need", "proj_root")))
 gc()
 ```
 
@@ -82,27 +108,34 @@ n_fields <- 10
 # ─── PATHS via here() ──────────────────────────────────────────────────────────
 
 # the right split file under <project_root>/data/train_test_split
+proj_root <- "/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous"
+
 splits_file <- here(
+  proj_root,
   "data", "train_test_split",
   sprintf("train_test_splits_%dfields.csv", n_fields)
 )
-output_dir <- here(
-  "results",
+
+
+output_dir <- file.path(
+  "/Users/mmousavi2/Desktop/tes_one_loop",
   sprintf("CF_outcome_%d_fields", n_fields)
 )
 if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+
 
 # ─── LOAD SPLITS ────────────────────────────────────────────────────────────────
 
 train_test_splits <- read_csv(splits_file)
 
+#train_test_splits <- train_test_splits_10fields
+
 # ─── MODEL LOOP ────────────────────────────────────────────────────────────────
 
 x_vars    <- c("Nk", "plateau", "b0")
-T_formula <- yield ~ s(N, k = 4)
-#T_formula <- y_tilde ~ s(N, k = 4)
-# cf_results <- lapply(train_test_splits$test_id[1], function(test_sim_id) # for 1 loop
-# cf_results <- lapply(train_test_splits$test_id, function(test_sim_id) # for all loops
+#T_formula <- yield ~ s(N, k = 4)
+T_formula <- y_tilde ~ s(N, k = 4)
+# cf_results <- lapply(train_test_splits$test_id, function(test_sim_id)
 cf_results <- lapply(train_test_splits$test_id[1], function(test_sim_id) {
   result_file <- file.path(output_dir, paste0("sim_", test_sim_id, ".rds"))
   if (file.exists(result_file)) {
@@ -131,44 +164,14 @@ cf_results <- lapply(train_test_splits$test_id[1], function(test_sim_id) {
       .[, .(sim, data)] %>%
       unnest(cols = c(data)) %>%
       data.table()
-    
-    
 
     # fit causal forest
     T_info     <- prepare_T_mat(T_formula, train_data)
-    Y          <- train_data[, yield]
+    Y          <- train_data[, y_tilde]
     X          <- train_data[, ..x_vars] %>% as.matrix()
     W          <- X
-    
-    message("Checking inputs before run_CF_c_py")
-
-# Dimensions
-message("Y: ", length(Y))
-message("T_info$T_sp: ", paste(dim(T_info$T_sp), collapse = " x "))
-message("X: ", paste(dim(X), collapse = " x "))
-message("W: ", paste(dim(W), collapse = " x "))
-
-    T_mat <- as.matrix(T_info$T_sp)
-
-stopifnot(
-  is.numeric(Y),
-  is.matrix(T_mat), is.matrix(X), is.matrix(W),
-  all(is.finite(Y)), all(is.finite(T_mat)),
-  all(is.finite(X)), all(is.finite(W)),
-  nrow(X) == length(Y),
-  nrow(W) == length(Y),
-  nrow(T_mat) == length(Y)
-)
-
-message("All inputs to CF are valid. Proceeding.")
-#te_hat_cf  <- run_CF_c_py(Y, T_info$T_sp, X, W, n_estimators = 2000)
-#te_hat_cf <- run_CF_c_py(Y, T_mat, X, W, n_estimators = 2000)
-
-message("Skipping run_CF_c_py; using dummy output")
-te_hat_cf <- matrix(0, nrow = nrow(test_data), ncol = ncol(T_mat))  # assuming output is like this
-    
+    te_hat_cf  <- run_CF_c_py(Y, T_info$T_sp, X, W, n_estimators = 2000)
     te_info    <- get_te(te_hat_cf, test_data, x_vars)
-    
 
     # response & EONR
     T_seq      <- train_data[, seq(min(N), max(N), length.out = 200)]
@@ -203,19 +206,11 @@ te_hat_cf <- matrix(0, nrow = nrow(test_data), ncol = ncol(T_mat))  # assuming o
   # 7) keep only the ID + opt_N
   .[, .(aunit_id, opt_N)]
 
-    
-
 
     combined <- ss_eonr[true_eonr, on = "aunit_id"]
     combined[, sim := test_sim_id]
 
     saveRDS(combined, result_file)
-    
-      # ── FREE MEMORY ──
-    # Python side:
-    reticulate::py_run_string("import gc; gc.collect()")
-    # R side:
-    gc()
     combined
 
   }, error = function(e) {
@@ -229,5 +224,10 @@ te_hat_cf <- matrix(0, nrow = nrow(test_data), ncol = ncol(T_mat))  # assuming o
   })
 })
 ```
+# rmse
 
+```{r}
+rmse_1_fields_one_loop <- sqrt(mean((sim_001_eonr$opt_N_hat - sim_001_eonr$opt_N)^2, na.rm = TRUE))  
+rmse_1_fields_one_loop
+```
 
