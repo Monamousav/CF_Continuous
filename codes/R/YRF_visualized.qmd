@@ -1,0 +1,31 @@
+---
+title: "yield response function"
+format:
+  html:
+    number-sections: true
+    number-depth: 1
+    theme: flatly
+    toc: true
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+## Packages and functions
+```{r setup_not_remove, echo=FALSE, include = F}
+#--- R functions ---#
+library(here)
+source(here("codes", "R", "visualize_yield_response_function.R"))
+```
+
+
+# Use it:
+
+```{r}
+plot_yield_response(model = "NO_ANN", n_fields = 5)     # uses N
+plot_yield_response(model = "DO_ANN", n_fields = 5)     # uses N_tilde 
+plot_yield_response(model = "SO_ANN", n_fields = 10) 
+plot_yield_response(model = "NO_RF", n_fields = 5) 
+plot_yield_response(model = "SO_RF", n_fields = 5) 
+```
