@@ -1,0 +1,374 @@
+---
+title: "yield response function"
+format:
+  html:
+    number-sections: true
+    number-depth: 1
+    theme: flatly
+    toc: true
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+## Packages and functions
+```{r setup_not_remove, echo=FALSE, include = F}
+#--- R functions ---#
+library(here)
+source(here("codes", "R", "visualize_yield_response_function.R"))
+```
+
+
+# Use it:
+
+```{r}
+plot_yield_response(model = "NO_ANN", n_fields = 5)     # uses N
+plot_yield_response(model = "DO_ANN", n_fields = 5)     # uses N_tilde 
+plot_yield_response(model = "SO_ANN", n_fields = 10) 
+plot_yield_response(model = "NO_RF", n_fields = 5) 
+plot_yield_response(model = "SO_RF", n_fields = 5) 
+```
+# RMSE
+
+```{r}
+# ============================
+# create per-sim RMSE table 
+# ============================
+
+# ---- Packages ----
+library(tidyverse)
+library(fs)
+library(here)
+library(readr)
+library(stringr)
+
+# ---- Constants: all 18 result folders ----
+MODEL_DIRS <- c(
+  "CF_outcome_1_fields","CF_outcome_5_fields","CF_outcome_10_fields",
+  "RANN_outcome_one_field","RANN_outcome_five_fields","RANN_outcome_ten_fields",
+  "Simple_ANN_outcome_one_field","Simple_ANN_outcome_five_fields","Simple_ANN_outcome_ten_fields",
+  "NO_RF_one_field","NO_RF_five_fields","NO_RF_ten_fields",
+  "HalfRRF_one_field","HalfRRF_five_fields","HalfRRF_ten_fields",
+  "half_RANN_outcome_one_field","half_RANN_outcome_five_fields","half_RANN_outcome_ten_fields"
+)
+
+EXPECTED_ROWS <- 1440L
+
+# ---- function ----
+rmse <- function(x, y) sqrt(mean((x - y)^2, na.rm = TRUE))
+
+parse_n_fields <- function(folder) {
+  case_when(
+    str_detect(folder, "(?:_1_fields|one_field)\\b")   ~ 1L,
+    str_detect(folder, "(?:_5_fields|five_fields)\\b") ~ 5L,
+    str_detect(folder, "(?:_10_fields|ten_fields)\\b") ~ 10L,
+    TRUE ~ NA_integer_
+  )
+}
+
+parse_model <- function(folder) {
+  f <- str_to_lower(folder)
+  case_when(
+    str_starts(f, "cf_")             ~ "CF",
+    str_starts(f, "rann_outcome")    ~ "RANN",
+    str_starts(f, "half_rann")       ~ "HalfRANN",
+    str_starts(f, "simple_ann")      ~ "Simple_ANN",
+    str_starts(f, "no_rf")           ~ "NO_RF",
+    str_starts(f, "halfrrf")         ~ "HalfRRF",
+    TRUE                             ~ folder
+  )
+}
+
+# Read any object: RDS, CSV
+read_any <- function(f) {
+  ext <- tolower(path_ext(f))
+  if (ext == "csv") return(read_csv(f, show_col_types = FALSE))
+  obj <- tryCatch(readRDS(f), error = function(e) NULL)
+  if (!is.null(obj)) return(obj)
+  env <- new.env(parent = emptyenv())
+  ok <- tryCatch({ nm <- load(f, envir = env); length(nm) > 0 }, error = function(e) FALSE)
+  if (ok) return(env[[ls(env)[1]]])
+  stop("Unsupported or unreadable file: ", f)
+}
+
+# Standardize to two numeric vectors (per-sim rows)
+read_eonr_file <- function(f) {
+  obj <- read_any(f)
+  if (is.list(obj) && all(c("pred","true") %in% names(obj))) {
+    list(pred = as.numeric(obj$pred), true = as.numeric(obj$true))
+  } else if (is.data.frame(obj) && all(c("pred","true") %in% names(obj))) {
+    list(pred = as.numeric(obj$pred), true = as.numeric(obj$true))
+  } else if (is.data.frame(obj) && all(c("opt_N_hat","opt_N") %in% names(obj))) {
+    list(pred = as.numeric(obj$opt_N_hat), true = as.numeric(obj$opt_N))  # CF
+  } else if (is.list(obj) && all(c("opt_N_hat","opt_N") %in% names(obj))) {
+    list(pred = as.numeric(obj$opt_N_hat), true = as.numeric(obj$opt_N))  # CF list
+  } else {
+    stop("Unknown structure (need pred/true or opt_N_hat/opt_N): ", f)
+  }
+}
+
+# 
+files_in_dir <- function(dir_path) {
+  dir_ls(dir_path, type = "file", recurse = TRUE) %>%
+    # Names like sim_055_eonr or EONR_1 
+    keep(~ str_detect(path_file(.x),
+           regex("^(sim_\\d+(?:_eonr)?|EONR_\\d+)(?:\\.(rds|rda|rdata|csv))?$",
+                 ignore_case = TRUE))) %>%
+    # drop anything starting with "validation"
+    discard(~ str_detect(path_file(.x), regex("^validation", ignore_case = TRUE))) %>%
+    # drop macOS Icon files
+    discard(~ grepl("Icon", basename(.x), fixed = TRUE))
+}
+
+# get sim id from filename base
+extract_sim_id <- function(base) {
+  m <- str_match(base, regex("^(?:sim_(\\d+)(?:_eonr)?|EONR_(\\d+))", ignore_case = TRUE))
+  coalesce(as.integer(m[,2]), as.integer(m[,3]))
+}
+
+# 
+row_from_file <- function(f, model, n_f, expected_rows = EXPECTED_ROWS) {
+  tryCatch({
+    base <- path_ext_remove(path_file(f))
+    sim_id <- extract_sim_id(base)
+    if (is.na(sim_id)) return(NULL)
+
+    e <- read_eonr_file(f)
+    n_rows <- length(e$pred)
+
+    tibble(
+      sim      = sim_id,
+      Model    = model,
+      `#field` = n_f,
+      n_rows   = n_rows,
+      RMSE     = rmse(e$pred, e$true),
+      ok_rows  = isTRUE(n_rows == expected_rows),
+      file     = f
+    )
+  }, error = function(e) NULL)
+}
+
+# ---- create table  ----
+build_rmse_table <- function(base_dir = here("results"),
+                             include_dirs = MODEL_DIRS,
+                             expected_rows = EXPECTED_ROWS) {
+  dirs <- file.path(base_dir, include_dirs)
+  dirs <- dirs[dir_exists(dirs)]
+
+  map_dfr(dirs, function(dir_path) {
+    folder <- path_file(dir_path)
+    model  <- parse_model(folder)
+    n_f    <- parse_n_fields(folder)
+
+    files <- files_in_dir(dir_path)
+
+    map_dfr(files, row_from_file, model = model, n_f = n_f,
+            expected_rows = expected_rows)
+  }) %>%
+    filter(!is.na(sim), !is.na(`#field`), !is.na(RMSE)) %>%
+    arrange(Model, `#field`, sim)
+}
+
+
+```
+
+# RMSE run
+
+```{r}
+# ---- run it (all models) ----
+rmse_tbl_raw <- build_rmse_table(
+  base_dir = here("results"),
+  include_dirs = MODEL_DIRS,
+  expected_rows = EXPECTED_ROWS
+)
+
+
+# save
+# write_csv(rmse_tbl_raw, here("results", "rmse_table_all_models.csv"))
+#saveRDS(rmse_tbl_raw, here("results", "rmse_tbl_raw.rds"))
+
+```
+
+# his
+
+
+```{r}
+
+
+library(dplyr)
+library(ggplot2)
+library(stringr)
+
+#  model names: row labels in the graph
+model_to_row <- c(
+  "Simple_ANN" = "No_ANN",
+  "RANN"       = "DO_ANN",
+  "NO_RF"      = "NO_RF",
+  "HalfRANN" = "SO_ANN",
+  "HalfRRF"  = "SO_RF",
+   "CF"       = "CF"
+)
+
+rmse_plot_df <- rmse_tbl_raw %>%
+  filter(ok_rows, Model %in% names(model_to_row)) %>%
+  mutate(
+    row_lab = recode(Model, !!!model_to_row),
+    col_lab = factor(`#field`,
+                     levels = c(1, 5, 10),
+                     labels = c("Number of fields: 1",
+                                "Number of fields: 5",
+                                "Number of fields: 10"))
+  )
+
+#  check 
+rmse_plot_df %>% count(row_lab, col_lab)
+
+# --- setup ---
+xmin <- 0
+nice_ceiling <- function(x, base = 5) base * ceiling(x / base)
+xmax <- nice_ceiling(max(rmse_plot_df$RMSE, na.rm = TRUE), base = 5)
+
+bins <- 25
+binwidth <- (xmax - xmin) / bins
+
+# --- Plot ---
+p <- ggplot(rmse_plot_df, aes(x = RMSE)) +
+  geom_histogram(binwidth = binwidth, boundary = 0, closed = "left") +
+  facet_grid(row_lab ~ col_lab, scales = "fixed") +  
+  scale_x_continuous(limits = c(xmin, xmax),
+                     breaks = seq(xmin, xmax, length.out = 6),
+                     expand = c(0, 0)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "RMSE by iteration", y = "Count") +
+  theme_bw() +
+  theme(
+    strip.text = element_text(face = "bold", size = 16),
+    axis.title = element_text(size = 14)
+  )
+
+p
+
+# ggsave(here::here("results", "rmse_hist_3rows.png"), p, width = 12, height = 7, dpi = 300)
+
+```
+
+# create rmse_summary
+
+```{r}
+# =========
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(tidyr)
+
+
+# 
+rmse_df <- rmse_tbl_raw %>%
+  dplyr::group_by(Model, `#field`, sim) %>%  
+  dplyr::summarise(RMSE = dplyr::first(RMSE), .groups = "drop") %>%
+  # Rename models
+  dplyr::mutate(
+    Model = dplyr::recode(
+      Model,
+      "Simple_ANN" = "NO_ANN",
+      "HalfRANN"   = "SO_ANN",
+      "RANN"       = "DO_ANN",
+      "HalfRRF"    = "SO_RF",
+      "CF"         = "CF",
+      "NO_RF"      = "NO_RF",
+      .default     = Model
+    ),
+    field_f = factor(`#field`, levels = c(1, 5, 10),
+                     labels = c("1 field", "5 fields", "10 fields"))
+  )
+
+# 3) summary stats 
+rmse_summary <- rmse_df %>%
+  dplyr::group_by(Model, field_f) %>%
+  dplyr::summarise(
+    n      = dplyr::n(),
+    mean   = mean(RMSE, na.rm = TRUE),
+    median = median(RMSE, na.rm = TRUE),
+    sd     = sd(RMSE, na.rm = TRUE),
+    se     = sd / sqrt(n),
+    lower  = mean + qt(0.025, df = n - 1) * se,
+    upper  = mean + qt(0.975, df = n - 1) * se,
+    .groups = "drop"
+  )
+
+```
+
+# plot 1
+
+
+```{r}
+# 
+p_mean <- ggplot(rmse_summary, aes(x = field_f, y = mean, group = Model, color = Model)) +
+  geom_line(linewidth = 0.7, alpha = 0.8) +
+  geom_point(size = 3) +
+  labs(x = "# fields", y = "Mean RMSE", color = "Model") +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size = 13),
+    strip.text = element_text(face = "bold")
+  )
+
+p_mean +
+  geom_text(aes(label = sprintf("%.1f", mean)), vjust = -0.6, size = 3, show.legend = FALSE) +
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.10)))
+
+p_mean
+
+
+# ggsave(here::here("results","rmse_mean_by_model_fields.png"), p_mean, width = 9, height = 5, dpi = 300)
+```
+
+# plot 2
+
+
+```{r}
+
+fill_min <- floor(min(rmse_summary$mean, na.rm = TRUE))
+fill_max <- ceiling(max(rmse_summary$mean, na.rm = TRUE))
+
+p_clear <- ggplot(rmse_summary, aes(x = field_f, y = Model, fill = mean)) +
+  geom_tile(color = "white", linewidth = 0.7) +
+  geom_text(aes(label = sprintf("%.1f", mean)),
+            size = 3.5, fontface = "bold", color = "black") +
+  scale_fill_gradient(
+    name = "Mean RMSE",
+    low = "#f7fbff",  
+    high = "#6baed6", 
+    limits = c(fill_min, fill_max)
+  ) +
+  coord_equal() +
+  labs(x = "# fields", y = "model") +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid = element_blank(),
+    legend.position = "right"
+    #plot.margin = margin(10, 10, 10, 10)
+  )
+
+p_clear
+
+# ggsave(here::here("results","rmse_mean_graph.png"), p_clear, width = 7.5, height = 4.5, dpi = 300)
+
+
+```
+
+
+
+# table
+
+```{r}
+
+# ------
+rmse_summary %>%
+  arrange(Model, field_f) %>%
+  mutate(`mean (sd)` = sprintf("%.2f (%.2f)", mean, sd)) %>%
+  select(Model, field_f, n, `mean (sd)`, median, lower, upper) %>%
+  print(n = Inf)
+
+```
