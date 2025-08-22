@@ -171,16 +171,23 @@ so causal forest can nonparametrically estimate each heterogeneous weight $\thet
 
 #### DO‑ANN
 
-The DO-ANN follows the same double-orthogonalized, linear-in-basis logic as DO-CF, adapted to the Model 3. Starting from the residualized outcome $\tilde{y}$, the continuous treatment $N$ is expanded into spline basis functions and each basis is orthogonalized with respect to $(X,W)$; these orthogonalized spline bases are $T_1, T_2, T_3$. The model assumes 
+In the DO-ANN approach, we apply double-orthogonalization to Model 3 by residualizing both the outcome $y$ and the continuous treatment $N$ with respect to $(X, W)$ using cross-fitted random forests:
 
 ```{=tex}
-\begin{align*}
-\tilde{y} \approx \theta_1(X) T_1+\theta_2(X) T_2+\theta_3(X) T_3,
+\tilde{y}=y-\widehat{\mathbb{E}}[y \mid X, W], \quad \tilde{N}=N-\widehat{\mathbb{E}}[N \mid X, W]
 \end{align*}
 ```
 
-so that each $\theta_k(X)$ is the heterogeneous weight on the corresponding orthogonalized spline component of $N$. The key difference from DO-CF is the estimator for the coefficient functions $\theta_k(X)$: in DO-CF these are learned nonparametrically via causal forests, whereas in DO-ANN they are approximated by three separate neural-network branches, each producing a scalar weight that multiplies one of the $T_k$; the branch outputs are summed to produce the predicted residual. Because the decomposition is linear in the orthogonalized spline bases, the same clean double-orthogonalization justification applies, and the learned branch outputs recover the heterogeneous response without introducing first-order bias from the nuisance fits. The combined output reconstructs $\hat{f}(X, N)$, which is then used in the economic objective to compute the EONR.
+The final-stage learner is a neural network that models $\tilde{y}$ as a linear function of $\tilde{N}$, with heterogeneity in the slope captured by covariates $X$:
 
+```{=tex}
+\hat{\tilde{y}}=\hat{\theta}(X) \cdot \tilde{N}
+\end{align*}
+```
+
+This structure preserves the linear-in-treatment-residual form required for valid double-orthogonalization while allowing $\hat{\theta}(X)$ to vary flexibly across sites. The neural network receives $X$ as input and outputs the site-specific treatment effect.
+
+After training, we reconstruct $\hat{f}(X, N)$ over a grid of candidate nitrogen rates by evaluating the model across values of $N$, and select the economically optimal nitrogen rate.
 
 ### Non-orthogonalized ANN (NO-NN) and RF (NO-RF)
 
