@@ -372,3 +372,44 @@ rmse_summary %>%
   print(n = Inf)
 
 ```
+
+# comparison plot
+
+```{r}
+# compare to which model?
+baseline <- "NO_RF"
+
+# average RMSE by Model × field
+avg_by <- rmse_df %>%
+  dplyr::group_by(Model, field_f) %>%
+  dplyr::summarise(mean_rmse = mean(RMSE), .groups = "drop")
+
+# baseline per field 
+baseline_by_field <- avg_by %>%
+  dplyr::filter(Model == baseline) %>%
+  dplyr::select(field_f, baseline_rmse = mean_rmse)
+
+# join and compute % improvement
+rel <- avg_by %>%
+  dplyr::left_join(baseline_by_field, by = "field_f") %>%
+  dplyr::filter(!is.na(baseline_rmse)) %>%
+  dplyr::mutate(
+    pct_impr = 100 * (baseline_rmse - mean_rmse) / baseline_rmse
+    # or: pct_impr = (1 - mean_rmse / baseline_rmse) * 100
+  ) %>%
+  dplyr::filter(Model != baseline)
+
+# Plot
+library(ggplot2)
+p_rel <- ggplot(rel, aes(x = field_f, y = pct_impr, fill = Model)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.65) +
+  geom_hline(yintercept = 0, linewidth = 0.4) +
+  geom_text(aes(label = sprintf("%.1f%%", pct_impr)),
+            position = position_dodge(width = 0.7), vjust = -0.4, size = 3, show.legend = FALSE) +
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.10))) +
+  labs(x = "# fields", y = sprintf("Improvement vs %s (%%)", baseline), fill = "Model") +
+  theme_bw()
+
+p_rel
+
+```
