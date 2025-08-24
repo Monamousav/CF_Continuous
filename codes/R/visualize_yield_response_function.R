@@ -86,6 +86,7 @@ plot_yield_response <- function(model = "NO_ANN",
     p <- p + scale_y_continuous(limits = c(y_min, y_max))
   }
   
-  print(p)
-  invisible(list(plot = p, file = csv_path, ids = pick, x_col = x_col, group_col = group_col))
+  #print(p)
+  #invisible(list(plot = p, file = csv_path, ids = pick, x_col = x_col, group_col = group_col))
+  p
 }
