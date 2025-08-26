@@ -217,11 +217,327 @@ For each simulation round, one field is selected as the test field. The remainin
 
 The experimental design within each field consists of randomized nitrogen treatment rates applied across plots. The nitrogen rates vary between fields and are drawn to reflect realistic trial setups that span a range of agronomic optima. For evaluation purposes, we use a grid of candidate nitrogen rates to compute predicted yield and associated marginal profit for each observation. The predicted EONR is the nitrogen rate that maximizes predicted profit.
 
-# Results and Discussions
+# Simulation Results 
+
+We compare six estimators—CF, SO_ANN, DO_ANN, NO_ANN, SO_RF, and NO_RF—over 500 Monte-Carlo replications and three training sizes (1, 5, and 10 fields). Each replication contains 1,440 evaluation units. Accuracy is assessed by the RMSE of the estimated economically optimal nitrogen rate (EONR) with respect to the true (simulated) EONR. Figures 1–4 summarize errors; Figure 5 panels illustrate representative yield–N response functions that help interpret the error patterns.
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+
+suppressPackageStartupMessages(library(here))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(stringr))
+
+# load data
+rmse_tbl_raw <- readRDS(here::here("results", "rmse_tbl_raw.rds"))
+```
+
+@fig-rmse-hist shows a clear ordering across methods. CF concentrates tightly at low RMSE for all training sizes, indicating both accuracy and stability. SO_ANN shifts steadily left as the number of fields increases, with visibly narrower spreads at 5 and 10 fields. In contrast, NO_ANN exhibits a heavy right tail with a single field but collapses toward the leading methods at 5–10 fields, showing its sensitivity to sample size. SO_RF improves with more fields yet remains less accurate than SO_ANN or CF. NO_RF has broad, right-shifted distributions and is a weak baseline. DO_ANN performs poorly across all sizes, with distributions centered at very high RMSE and little improvement from additional fields.
+
+```{r}
+#| label: fig-rmse-hist
+#| fig-cap: "RMSE histograms by model and number of fields."
+#| fig-width: 12
+#| fig-height: 7
+
+# model names: row labels in the graph
+model_to_row <- c(
+  "Simple_ANN" = "No_ANN",
+  "RANN"       = "DO_ANN",
+  "NO_RF"      = "NO_RF",
+  "HalfRANN"   = "SO_ANN",
+  "HalfRRF"    = "SO_RF",
+  "CF"         = "CF"
+)
+
+rmse_plot_df <- rmse_tbl_raw %>%
+  dplyr::filter(ok_rows, Model %in% names(model_to_row)) %>%
+  dplyr::mutate(
+    row_lab = dplyr::recode(Model, !!!model_to_row),
+    col_lab = factor(`#field`,
+                     levels = c(1, 5, 10),
+                     labels = c("Number of fields: 1",
+                                "Number of fields: 5",
+                                "Number of fields: 10"))
+  )
+
+# consistent axes
+xmin <- 0
+nice_ceiling <- function(x, base = 5) base * ceiling(x / base)
+xmax <- nice_ceiling(max(rmse_plot_df$RMSE, na.rm = TRUE), base = 5)
+bins <- 25
+binwidth <- (xmax - xmin) / bins
+
+p <- ggplot(rmse_plot_df, aes(x = RMSE)) +
+  geom_histogram(binwidth = binwidth, boundary = 0, closed = "left") +
+  facet_grid(row_lab ~ col_lab, scales = "fixed") +
+  scale_x_continuous(limits = c(xmin, xmax),
+                     breaks = seq(xmin, xmax, length.out = 6),
+                     expand = c(0, 0)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "RMSE by iteration", y = "Count") +
+  theme_bw() +
+  theme(
+    strip.text = element_text(face = "bold", size = 16),
+    axis.title = element_text(size = 14)
+  )
+
+p
+```
+
+Mean RMSE by model and training size (@fig-avg-performance and @tbl-mean-rmse-heatmap) confirms these patterns. CF is consistently low (≈15 across sizes). SO_ANN improves monotonically as data increase and attains the best mean at 10 fields (≈11). NO_ANN is unusable with a single field (mean ≈82) but becomes competitive by 5–10 fields (≈14 and ≈13). SO_RF yields moderate means (≈22 at 10 fields), while NO_RF remains highest among the non-ANN baselines (≈36–40). DO_ANN is uniformly poor (≈90–93). The heatmap (Fig. 3) prints the means in each cell and emphasizes the strong gains from orthogonalization (SO_ANN and CF) relative to their non-orthogonal counterparts.
+
+
+```{r}
+#| label: fig-avg-performance
+#| fig-cap: "Average performance by model and number of fields."
+#| fig-width: 12
+#| fig-height: 7
+
+rmse_df <- rmse_tbl_raw %>%
+  dplyr::group_by(Model, `#field`, sim) %>%  
+  dplyr::summarise(RMSE = dplyr::first(RMSE), .groups = "drop") %>%
+  # Rename models
+  dplyr::mutate(
+    Model = dplyr::recode(
+      Model,
+      "Simple_ANN" = "NO_ANN",
+      "HalfRANN"   = "SO_ANN",
+      "RANN"       = "DO_ANN",
+      "HalfRRF"    = "SO_RF",
+      "CF"         = "CF",
+      "NO_RF"      = "NO_RF",
+      .default     = Model
+    ),
+    field_f = factor(`#field`, levels = c(1, 5, 10),
+                     labels = c("1 field", "5 fields", "10 fields"))
+  )
+
+# 3) summary stats 
+rmse_summary <- rmse_df %>%
+  dplyr::group_by(Model, field_f) %>%
+  dplyr::summarise(
+    n      = dplyr::n(),
+    mean   = mean(RMSE, na.rm = TRUE),
+    median = median(RMSE, na.rm = TRUE),
+    sd     = sd(RMSE, na.rm = TRUE),
+    se     = sd / sqrt(n),
+    lower  = mean + qt(0.025, df = n - 1) * se,
+    upper  = mean + qt(0.975, df = n - 1) * se,
+    .groups = "drop"
+  )
+
+# 
+p_mean <- ggplot(rmse_summary, aes(x = field_f, y = mean, group = Model, color = Model)) +
+  geom_line(linewidth = 0.7, alpha = 0.8) +
+  geom_point(size = 3) +
+  labs(x = "# fields", y = "Mean RMSE", color = "Model") +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size = 13),
+    strip.text = element_text(face = "bold")
+  )
+
+p_mean
+
+
+# ggsave(here::here("results","rmse_mean_by_model_fields.png"), p_mean, width = 9, height = 5, dpi = 300)
+```
+
+```{r}
+#| label: tbl-mean-rmse-heatmap
+#| tbl-cap: "Mean RMSE by model and number of fields."
+#| tbl-cap-location: bottom
+#| echo: false
+#| message: false
+#| warning: false
+
+library(dplyr)
+library(tidyr)
+library(gt)
+library(scales)
+
+# Range for coloring
+fill_min <- floor(min(rmse_summary$mean, na.rm = TRUE))
+fill_max <- ceiling(max(rmse_summary$mean, na.rm = TRUE))
+
+# Wide table of means
+rmse_table <- rmse_summary %>%
+  select(Model, field_f, mean) %>%
+  mutate(mean = round(mean, 1)) %>%
+  pivot_wider(names_from = field_f, values_from = mean) %>%
+  arrange(Model)
+
+# Light → mid-blue palette
+pal <- col_numeric(
+  palette = c("#f7fbff", "#6baed6"),
+  domain  = c(fill_min, fill_max)
+)
+
+# HTML colorbar legend to place under the table
+legend_html <- sprintf(
+  '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+     <span style="font-size:12px;color:#444;">Low (%.1f)</span>
+     <div style="flex:1;height:10px;background:linear-gradient(to right,#f7fbff,#6baed6);
+                 border:1px solid #ddd;border-radius:3px;"></div>
+     <span style="font-size:12px;color:#444;">High (%.1f)</span>
+   </div>', fill_min, fill_max)
+
+rmse_table %>%
+  gt(rowname_col = "Model") %>%
+  data_color(
+    columns = c(`1 field`, `5 fields`, `10 fields`),
+    colors  = pal
+  ) %>%
+  fmt_number(columns = c(`1 field`, `5 fields`, `10 fields`), decimals = 1) %>%
+  cols_label(
+    `1 field`  = "1 field",
+    `5 fields` = "5 fields",
+    `10 fields`= "10 fields"
+  ) %>%
+  tab_options(
+    table.font.size = px(13),
+    data_row.padding = px(6),
+    column_labels.font.weight = "bold"
+  ) %>%
+  tab_source_note(source_note = gt::html(legend_html))
+```
+
+Using NO_RF as a baseline, CF reduces mean RMSE by roughly 58–61 % across training sizes (@fig-improvement). SO_ANN delivers comparable or larger gains (≈54–69 %), with the largest improvement at 10 fields. SO_RF provides modest gains (≈38–42 %). NO_ANN is worse than the baseline with 1 field but improves substantially at 5–10 fields (≈63–65 % reduction). DO_ANN is consistently inferior to the baseline at all sizes.
+
+```{r}
+#| label: fig-improvement
+#| fig-cap: "Improvement relative to NO_RF."
+#| fig-width: 12
+#| fig-height: 7
+
+# compare to which model?
+baseline <- "NO_RF"
+
+# average RMSE by Model × field
+
+rmse_df <- rmse_tbl_raw %>%
+  dplyr::group_by(Model, `#field`, sim) %>%  
+  dplyr::summarise(RMSE = dplyr::first(RMSE), .groups = "drop") %>%
+  # Rename models
+  dplyr::mutate(
+    Model = dplyr::recode(
+      Model,
+      "Simple_ANN" = "NO_ANN",
+      "HalfRANN"   = "SO_ANN",
+      "RANN"       = "DO_ANN",
+      "HalfRRF"    = "SO_RF",
+      "CF"         = "CF",
+      "NO_RF"      = "NO_RF",
+      .default     = Model
+    ),
+    field_f = factor(`#field`, levels = c(1, 5, 10),
+                     labels = c("1 field", "5 fields", "10 fields"))
+  )
+
+
+
+avg_by <- rmse_df %>%
+  dplyr::group_by(Model, field_f) %>%
+  dplyr::summarise(mean_rmse = mean(RMSE), .groups = "drop")
+
+# baseline per field 
+baseline_by_field <- avg_by %>%
+  dplyr::filter(Model == baseline) %>%
+  dplyr::select(field_f, baseline_rmse = mean_rmse)
+
+# join and compute % improvement
+rel <- avg_by %>%
+  dplyr::left_join(baseline_by_field, by = "field_f") %>%
+  dplyr::filter(!is.na(baseline_rmse)) %>%
+  dplyr::mutate(
+    pct_impr = 100 * (baseline_rmse - mean_rmse) / baseline_rmse
+    # or: pct_impr = (1 - mean_rmse / baseline_rmse) * 100
+  ) %>%
+  dplyr::filter(Model != baseline)
+
+# Plot
+library(ggplot2)
+p_rel <- ggplot(rel, aes(x = field_f, y = pct_impr, fill = Model)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.65) +
+  geom_hline(yintercept = 0, linewidth = 0.4) +
+  geom_text(aes(label = sprintf("%.1f%%", pct_impr)),
+            position = position_dodge(width = 0.7), vjust = -0.4, size = 3, show.legend = FALSE) +
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.10))) +
+  labs(x = "# fields", y = sprintf("Improvement vs %s (%%)", baseline), fill = "Model") +
+  theme_bw()
+
+p_rel
+
+```
+
+Predicted yield–N curves (@fig-yield-res-1 through @fig-yield-res-5) for five randomly selected analysis units clarify why methods differ. SO_ANN produces agronomically plausible, monotone-concave responses with clear plateaus (ten-field panel), yielding interior optima and low EONR error. NO_ANN resembles SO_ANN once trained on 5–10 fields, but with a single field it is noticeably noisier, aligning with its heavy-tailed errors. Tree-based models (NO_RF and SO_RF) generate step-like, piecewise-constant responses; the implied EONR can only move at jump points, which coarsens the optimum and limits accuracy. DO_ANN often yields nearly linear increasing curves across the tested N range, pushing the optimum to the upper bound and explaining its uniformly high error. Although CF is not naturally expressed as per-unit yield curves, its error distribution indicates high stability across all sizes.
+
+```{r}
+#| label: fig-yield-res-1
+#| fig-cap: "Yield response function (NO_ANN; 5 fields)."
+#| fig-cap-location: bottom
+#| fig-width: 12
+#| fig-height: 7
+#| message: false
+#| warning: false
+
+source(here("codes", "R", "visualize_yield_response_function.R"))
+
+
+plot_yield_response(model = "NO_ANN", n_fields = 5)     # uses N
+```
+```{r}
+#| label: fig-yield-res-2
+#| fig-cap: "Yield response function (DO_ANN; 5 fields)."
+#| fig-width: 12
+#| fig-height: 7
+
+source(here("codes", "R", "visualize_yield_response_function.R"))
+plot_yield_response(model = "DO_ANN", n_fields = 5)     # uses N_tilde 
+
+```
+
+```{r}
+#| label: fig-yield-res-3
+#| fig-cap: "Yield response function SO_ANN (SO_ANN; 10 fields)."
+#| fig-width: 12
+#| fig-height: 7
+#| 
+source(here("codes", "R", "visualize_yield_response_function.R"))
+plot_yield_response(model = "SO_ANN", n_fields = 10) 
+
+```
+
+```{r}
+#| label: fig-yield-res-4
+#| fig-cap: "Yield response function NO_RF (NO_RF; 5 fields)."
+#| fig-width: 12
+#| fig-height: 7
+#| 
+source(here("codes", "R", "visualize_yield_response_function.R"))
+plot_yield_response(model = "NO_RF", n_fields = 5) 
+
+```
+
+```{r}
+#| label: fig-yield-res-5
+#| fig-cap: "Yield response function SO_RF (SO_RF; 5 fields)."
+#| fig-width: 12
+#| fig-height: 7
+#| 
+source(here("codes", "R", "visualize_yield_response_function.R"))
+plot_yield_response(model = "SO_RF", n_fields = 5) 
+```
 
 
 # Conclusion
 
+Across 500 replications, SO_ANN (with ≥10 fields) and CF deliver the best overall accuracy. Orthogonalization is critical: SO_ANN and CF are consistently superior to NO_ANN and NO_RF, especially in small-to-moderate samples. NO_ANN becomes competitive only once training data reach at least five fields. Tree-based baselines remain substantially less accurate, and the doubly-orthogonal ANN (DO_ANN) is inappropriate for this setting because it fails to recover the saturating response shape. These findings are robust across training sizes and are consistent.
 
 
 
