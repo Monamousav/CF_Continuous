@@ -36,7 +36,7 @@ We run Monte Carlo simulation to test the performance of ...
 The standard approach in the precision-agriculture literature for estimating site-specific input response is to model the outcome level directly as a function of the treatment/input and covariates—e.g., estimate $Y=f(I,C)$ where $I$ is the input (like nitrogen rate) and $C$ are field characteristics—and then derive optimal input decisions from that estimated function. This is what is typically done in the recent on-farm precision experimentation literature (e.g., @barbosa2020risk; @barbosa2020modeling; @krause2020random; @gardner2021economic).
 The problem is that these methods optimize prediction of yield levels—not the causal effect of changing the input. Good level prediction at the observed input does not guarantee accurate recovery of the response function needed for optimal input choice, because the fitted $f(I,C)$ can conflate input variation with confounding and misattribute the drivers of yield variation.
 
-To identify causal effects rather than just predict levels in the single binary treatment case, researchers use double/debiased machine learning (DML), which introduces orthogonalization so the treatment-effect estimator is insensitive to small errors in the auxiliary fits (I need citation here). 
+To identify causal effects rather than just predict levels in the single binary treatment case, researchers use double/debiased machine learning (DML), which introduces orthogonalization so the treatment-effect estimator is insensitive to small errors in the auxiliary fits (@chernozhukov2018double; @mackey2018orthogonal). 
 Consider the structural model (Model 1):
 
 ```{=tex}
