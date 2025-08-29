@@ -1,0 +1,66 @@
+---
+title: "Add b1 & b2 to the data_2nd_stage"
+author: "Your Name Here"
+format:
+  html:
+    number-sections: true
+    number-depth: 1
+    theme: flatly
+    toc: true
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+# Load data
+```{r setup_not_remove, echo=FALSE, include = F}
+
+library(here)
+
+data_2nd_stage <- readRDS(here("data", "data_20230504", "data_2nd_stage.rds"))
+
+
+```
+
+
+# Add b1 & b2 into data_2nd_stage
+```{r setup_not_remove, echo=FALSE, include = F}
+library(data.table)
+
+reg_data  <- raw_sim_data$reg_data[[1]]
+# flatten the list-column `data` inside `reg_data`
+reg_data_flat <- rbindlist(
+  lapply(seq_len(nrow(reg_data)), function(i) {
+    df <- reg_data$data[[i]]
+    df$sim <- reg_data$sim[i]
+    df
+  }),
+  use.names = TRUE, fill = TRUE
+)
+
+# keep only needed columns for the join
+reg_data_subset <- reg_data_flat[, .(sim, aunit_id, b1, b2)]
+
+# set as data.table 
+setDT(data_2nd_stage)
+
+# merge by sim and aunit_id
+data_2nd_stage <- merge(
+  data_2nd_stage,
+  reg_data_subset,
+  by = c("sim", "aunit_id"),
+  all.x = TRUE,
+  sort = FALSE
+)
+
+# save
+saveRDS(
+  data_2nd_stage,
+  here("data", "data_20230504", "data_2nd_stage.rds")
+)
+
+
+```
+
+
