@@ -23,11 +23,31 @@ source(here("codes", "R", "visualize_yield_response_function.R"))
 # Use it:
 
 ```{r}
-plot_yield_response(model = "NO_ANN", n_fields = 5)     # uses N
-plot_yield_response(model = "DO_ANN", n_fields = 5)     # uses N_tilde 
-plot_yield_response(model = "SO_ANN", n_fields = 10) 
-plot_yield_response(model = "NO_RF", n_fields = 5) 
-plot_yield_response(model = "SO_RF", n_fields = 5) 
+# plot_yield_response(model = "NO_ANN", n_fields = 5)     # uses N
+# plot_yield_response(model = "DO_ANN", n_fields = 5)     # uses N_tilde 
+# plot_yield_response(model = "SO_ANN", n_fields = 10) 
+# plot_yield_response(model = "NO_RF", n_fields = 5) 
+# plot_yield_response(model = "SO_RF", n_fields = 5) 
+
+
+models_to_compare <- c("NO_ANN", "DO_ANN", "SO_ANN", "NO_RF", "SO_RF")
+
+# compute global limits for you
+plot_yield_response("NO_ANN", 1, global_models = models_to_compare)
+plot_yield_response("NO_ANN", 5, global_models = models_to_compare)
+plot_yield_response("NO_ANN", 10, global_models = models_to_compare)
+plot_yield_response("DO_ANN", 1, global_models = models_to_compare)
+plot_yield_response("DO_ANN", 5, global_models = models_to_compare)
+plot_yield_response("DO_ANN", 10, global_models = models_to_compare)
+plot_yield_response("SO_ANN", 1, global_models = models_to_compare)
+plot_yield_response("SO_ANN", 5, global_models = models_to_compare)
+plot_yield_response("SO_ANN", 10, global_models = models_to_compare)
+plot_yield_response("NO_RF",  1, global_models = models_to_compare)
+plot_yield_response("NO_RF",  5, global_models = models_to_compare)
+plot_yield_response("NO_RF",  10, global_models = models_to_compare)
+plot_yield_response("SO_RF",  1, global_models = models_to_compare)
+plot_yield_response("SO_RF",  5, global_models = models_to_compare)
+plot_yield_response("SO_RF",  10, global_models = models_to_compare)
 ```
 # RMSE
 
