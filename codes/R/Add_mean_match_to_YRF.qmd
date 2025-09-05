@@ -1,0 +1,71 @@
+---
+title: "Add mean match to YRF"
+author: "Your Name Here"
+format:
+  html:
+    number-sections: true
+    number-depth: 1
+    theme: flatly
+    toc: true
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+# Add mean match
+```{r setup_not_remove, echo=FALSE, include = F}
+
+suppressPackageStartupMessages({
+  library(here)
+  library(readr)
+  library(dplyr)
+  library(stringr)
+  library(purrr)
+})
+
+
+base_dir <- here::here("results", "yield_response_function_for_one_iteration")
+if (!dir.exists(base_dir)) {
+  stop("Base results directory not found: ", base_dir, call. = FALSE)
+}
+
+# mean-match predicted yield to true yield 
+mean_match_file <- function(csv_path) {
+  df <- suppressMessages(readr::read_csv(csv_path, show_col_types = FALSE))
+
+  # Need both columns present
+  if (!all(c("pred_yield", "true_yield") %in% names(df))) {
+    message("Skipping (missing pred_yield/true_yield): ", csv_path)
+    return(invisible(FALSE))
+  }
+
+  # global mean-match (single shift per file)
+  delta <- mean(df$true_yield, na.rm = TRUE) - mean(df$pred_yield, na.rm = TRUE)
+
+  df <- df %>%
+    mutate(pred_yield_mm = pred_yield + delta) %>%
+    relocate(pred_yield_mm, .after = pred_yield)
+
+  readr::write_csv(df, csv_path)
+  message(sprintf("Updated: %s  (delta = %.6f)", csv_path, delta))
+  invisible(TRUE)
+}
+
+# find all YRF_* subfolders, but skip NO_* models
+subdirs <- list.dirs(base_dir, recursive = FALSE, full.names = TRUE)
+targets <- subdirs[!grepl("^YRF_NO_", basename(subdirs), ignore.case = TRUE)]
+
+# process each yield_response_*.csv in folders
+walk(targets, function(dir_path) {
+  csvs <- list.files(dir_path, pattern = "^yield_response_.*\\.csv$", full.names = TRUE)
+  if (!length(csvs)) {
+    message("No yield_response_*.csv in: ", dir_path)
+    return(invisible(NULL))
+  }
+  walk(csvs, mean_match_file)
+})
+
+```
+
+
