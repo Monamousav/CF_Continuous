@@ -13,14 +13,19 @@ if __name__ == "__main__":
 
     # === Simple ANN ===
     #run_simpleann("SimpleANN", 1, data_2nd_stage, evall_N_seq, device)
-    run_simpleann("SimpleANN", 5, data_2nd_stage, evall_N_seq, device)
+    #run_simpleann("SimpleANN",2, data_2nd_stage, evall_N_seq, device)
+    #run_simpleann("SimpleANN",3, data_2nd_stage, evall_N_seq, device)
+    #run_simpleann("SimpleANN", 4, data_2nd_stage, evall_N_seq, device)
+    #run_simpleann("SimpleANN", 5, data_2nd_stage, evall_N_seq, device)
     #run_simpleann("SimpleANN", 10, data_2nd_stage, evall_N_seq, device)
+    run_simpleann("SimpleANN", 20, data_2nd_stage, evall_N_seq, device)
 
 
  # === half RANN ===
     #run_half_RANN("half_RANN", 1, data_2nd_stage, evall_N_seq, device)
     #run_half_RANN("half_RANN", 5, data_2nd_stage, evall_N_seq, device)
     #run_half_RANN("half_RANN", 10, data_2nd_stage, evall_N_seq, device)
+    #run_half_RANN("half_RANN", 20, data_2nd_stage, evall_N_seq, device)
 
 
 # === half RRF ===

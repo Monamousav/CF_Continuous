@@ -132,7 +132,8 @@ def run_model(model_type, n_fields, data_2nd_stage, evall_N_seq, device):
     folder_map = {
         ("half_RANN", 1): "half_RANN_outcome_one_field",
         ("half_RANN", 5): "half_RANN_outcome_five_fields",
-        ("half_RANN", 10): "half_RANN_outcome_ten_fields"
+        ("half_RANN", 10): "half_RANN_outcome_ten_fields",
+        ("half_RANN", 20): "half_RANN_outcome_twenty_fields" 
     }
     folder_name = folder_map.get((model_type, n_fields))
     if folder_name is None:

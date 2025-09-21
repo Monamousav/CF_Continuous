@@ -41,10 +41,22 @@ print("GPU is", "available" if torch.cuda.is_available() else "NOT AVAILABLE")
 
 # %%
 # === set directory ===
+#import os
+#notebook_dir = "/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous"  
+#os.chdir(notebook_dir)  # Change directory
+#print(os.getcwd())  
+
+# === set directory ===
+from pathlib import Path
 import os
-notebook_dir = "/Users/mmousavi2/Dropbox/Causal_climate/Data_and_results_CF_Continuous"  
-os.chdir(notebook_dir)  # Change directory
-print(os.getcwd())  
+
+# project root = two levels up from this script (../CF_Continuous)
+project_root = Path(__file__).resolve().parents[3]
+notebook_dir = project_root  # CF_Continuous root
+
+os.chdir(notebook_dir)
+print("Working dir:", os.getcwd())
+
 
 # %%
 # === LOAD DATA ===
@@ -67,10 +79,28 @@ def create_split_csv(n_fields, output_path):
     df = pd.DataFrame(splits)
     df.to_csv(output_path, index=False)
 
+from pathlib import Path
+import os
+
+def maybe_create_split(n_fields, filename):
+    if not Path(filename).exists():
+        create_split_csv(n_fields, filename)
+        print(f"✅ Created {filename}")
+    else:
+        print(f"⚡ Already exists: {filename}")
+
+
+
 os.makedirs("./data/train_test_split", exist_ok=True)
-create_split_csv(1, './data/train_test_split/train_test_splits_1fields.csv')
-create_split_csv(5, './data/train_test_split/train_test_splits_5fields.csv')
-create_split_csv(10, './data/train_test_split/train_test_splits_10fields.csv')
+
+# list of splits
+field_counts = [1,2,3,4, 5, 10, 20]
+
+
+# loop over them
+for n in field_counts:
+    filename = f'./data/train_test_split/train_test_splits_{n}fields.csv'
+    maybe_create_split(n, filename)
 
 # %%
 
