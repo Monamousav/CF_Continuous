@@ -21,6 +21,34 @@ library(officer)
 + Why we need the methods we are proposing? Motivation.
 + Summary of findings 
 
+**Widespread use of machine learning methods:**
+
++ ML is being widely used because it captures complex interactions better than traditional models, helping improve yield prediction and site-specific decisions.
+
+The rapid expansion of data from precision agriculture technologies has encouraged widespread adoption of machine learning (ML) methods in agricultural economics and crop management research. Traditional linear and quadratic models often fall short in capturing the nonlinear and spatially complex relationships between crop yields, management inputs, and environmental variables, which has led to a shift toward more flexible ML approaches. For example, random forest regression has been applied to optimize variable planting rates for corn and soybean, showing the ability to handle high-dimensional interactions between soil, topography, and weather while often performing better than linear models (@krause2020random). Similarly, convolutional neural networks (CNNs) have been developed to model crop yield response to seed and nitrogen management, making use of spatial features in field data and achieving substantial gains in predictive accuracy over conventional models (@barbosa2020modeling). More recent work has extended these deep learning approaches to incorporate ensemble methods, further improving prediction reliability and practical applicability in farm-level decision support (@barbosa2020risk). In addition, on-farm precision experimentation combined with ML-based yield response estimation has provided tools for empirically evaluating the economic performance of site-specific input recommendations, highlighting the potential of these methods for guiding practical decision-making (@gardner2021economic). Taken together, these studies point to the growing role of machine learning in advancing both predictive modeling and economic optimization in agriculture, marking a shift in how site-specific management is studied and implemented.
+
+**Causal machine learning becoming more and more imporatnt**
+
++ prediction alone is not enough, which is why causal ML is becoming increasingly important.
+
+While prediction-oriented machine learning methods have advanced site-specific management by improving yield modeling and decision support, there is a growing recognition that accurate prediction alone is not sufficient. For farm-level recommendations, the central question is not just how well a model fits observed yields, but how input changes cause yield outcomes. This shift in focus has increased the importance of causal machine learning methods, which are specifically designed to estimate heterogeneous treatment effects rather than simply predict yield levels. In agricultural economics and precision agriculture, these methods are becoming increasingly relevant as researchers look for tools that provide more reliable directions for optimizing input use across diverse field conditions.
+
+**example using CF**
+
++ In this paragraph I talked about an example using CF. Their work was limited to discrete treatments, but as more  data become available, N become continuous. Since CF is strong, we need to adapt it for continuous treatments.
+
+One prominent example of this trend is the causal forest (@athey2019generalized), which has become a valuable tool in the context of On-Farm Precision Experimentation (OFPE). Unlike prediction-based methods, causal forest is designed to non-parametrically identify heterogeneous treatment effects, making it well suited for revealing complex interactions among variables when the underlying functional forms are unknown. @kakimoto2022causal showed that it can estimate heterogeneous treatment effects of inputs on yield more accurately than prediction-based methods such as random forest, boosted forest, or convolutional neural networks. Their study, however, was limited to a single-year experiment on one field. Causal forest was originally developed for discrete treatments, and OFPE trials often include five or six distinct experimental input levels. In @kakimoto2022causal, the method estimated the effect of increasing nitrogen rates relative to the lowest rate, resulting in multiple treatment contrasts within the trial. As multi-year, multi-field OFPE datasets accumulate, pooling data across fields has become both feasible and desirable—it can improve estimation of yield response functions and deliver stronger agronomic and economic insights. But pooling brings together trials with different target rates, so applied nitrogen covers a near-continuous range, which creates a need for methods that handle continuous treatments. Using data across many fields offers clear advantages, and it becomes especially important to adapt causal forest methods to continuous treatments without losing their statistical strengths over other machine-learning approaches.
+
+**Objective**
+
++ the objective is to extend CF to continuous treatments, so we can recover full yield response functions and test performance.
+
+**Q**
+
+We also have SO. How to talk about it as an objective here?
+
+The objective of this study is to develop and evaluate a causal machine learning approach that can recover the full yield response function from on-farm precision experimentation data, where treatment variables such as nitrogen rates are continuous and randomized. Existing methods, including random forests, boosted forests, and neural networks, often fail to capture heterogeneous treatment effects of continuous treatments, while most causal machine learning frameworks have been designed for binary treatments. To address this gap, we extend the causal forest framework to continuous treatment settings by incorporating smoothing splines, allowing the model to non-parametrically capture complex interactions among covariates without imposing restrictive functional form assumptions. We assess the performance of the proposed method through Monte Carlo simulations, comparing it with commonly used machine learning approaches, and report results across scenarios using data from one, five, and ten fields. 
+
 # Method
 
 We run Monte Carlo simulation to test the performance of ...
@@ -66,7 +94,7 @@ Y_{\mathrm{res}}=Y-\mathbb{E}[Y \mid X, W]=\theta(X)(T-h(X, W))+v=\theta(X) T_{\
 
 Thus regressing $Y_{\mathrm{res}}$ on $T_{\mathrm{res}}$ recovers $\theta(X)$ up to noise.
 
-In the on farm precision experiment (OFPE) setting, the ideas behind DML have shown promise for causal effect estimation. @kakimoto2022causal applied this framework to estimate heterogeneous treatment effects of nitrogen on yield, but their implementation was limited to a single-year experiment from one field and treated heterogeneity in a discrete way. They defined multiple “treatments” as increases from the lowest nitrogen rate to each higher rate, which is natural when there are only five or six fixed target rates per field. When data are pooled across fields with differing targets, however, applied nitrogen rates become effectively continuous, and the standard residualization of the treatment in DML does not extend cleanly to that setting.
+In the OFPE setting, the ideas behind DML have shown promise for causal effect estimation. @kakimoto2022causal applied this framework to estimate heterogeneous treatment effects of nitrogen on yield, but their implementation was limited to a single-year experiment from one field and treated heterogeneity in a discrete way. They defined multiple “treatments” as increases from the lowest nitrogen rate to each higher rate, which is natural when there are only five or six fixed target rates per field. When data are pooled across fields with differing targets, however, applied nitrogen rates become effectively continuous, and the standard residualization of the treatment in DML does not extend cleanly to that setting.
 
 Consider the continuous-treatment setting, where the structural model is
 
