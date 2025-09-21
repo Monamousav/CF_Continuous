@@ -32,7 +32,7 @@ source(here("codes", "R", "visualize_yield_response_function.R"))
 
 models_to_compare <- c("NO_ANN", "DO_ANN", "SO_ANN", "NO_RF", "SO_RF")
 
-# compute global limits for you
+# 
 plot_yield_response("NO_ANN", 1, global_models = models_to_compare)
 plot_yield_response("NO_ANN", 5, global_models = models_to_compare)
 plot_yield_response("NO_ANN", 10, global_models = models_to_compare)
@@ -49,6 +49,10 @@ plot_yield_response("SO_RF",  1, global_models = models_to_compare)
 plot_yield_response("SO_RF",  5, global_models = models_to_compare)
 plot_yield_response("SO_RF",  10, global_models = models_to_compare)
 ```
+
+
+
+
 # RMSE
 
 ```{r}
@@ -67,10 +71,11 @@ library(stringr)
 MODEL_DIRS <- c(
   "CF_outcome_1_fields","CF_outcome_5_fields","CF_outcome_10_fields",
   "RANN_outcome_one_field","RANN_outcome_five_fields","RANN_outcome_ten_fields",
-  "Simple_ANN_outcome_one_field","Simple_ANN_outcome_five_fields","Simple_ANN_outcome_ten_fields",
+  "Simple_ANN_outcome_one_field","Simple_ANN_outcome_two_fields","Simple_ANN_outcome_three_fields", "Simple_ANN_outcome_four_fields",
+  "Simple_ANN_outcome_five_fields","Simple_ANN_outcome_ten_fields","Simple_ANN_outcome_twenty_fields",
   "NO_RF_one_field","NO_RF_five_fields","NO_RF_ten_fields",
   "HalfRRF_one_field","HalfRRF_five_fields","HalfRRF_ten_fields",
-  "half_RANN_outcome_one_field","half_RANN_outcome_five_fields","half_RANN_outcome_ten_fields"
+  "half_RANN_outcome_one_field","half_RANN_outcome_five_fields","half_RANN_outcome_ten_fields", "half_RANN_outcome_twenty_fields"
 )
 
 EXPECTED_ROWS <- 1440L
@@ -80,9 +85,13 @@ rmse <- function(x, y) sqrt(mean((x - y)^2, na.rm = TRUE))
 
 parse_n_fields <- function(folder) {
   case_when(
-    str_detect(folder, "(?:_1_fields|one_field)\\b")   ~ 1L,
-    str_detect(folder, "(?:_5_fields|five_fields)\\b") ~ 5L,
-    str_detect(folder, "(?:_10_fields|ten_fields)\\b") ~ 10L,
+    str_detect(folder, "(?:_1_fields|one_field)\\b")      ~ 1L,
+    str_detect(folder, "(?:_2_fields|two_fields?)\\b")    ~ 2L,
+    str_detect(folder, "(?:_3_fields|three_fields?)\\b")  ~ 3L,
+    str_detect(folder, "(?:_4_fields|four_fields?)\\b")   ~ 4L,
+    str_detect(folder, "(?:_5_fields|five_fields?)\\b")   ~ 5L,
+    str_detect(folder, "(?:_10_fields|ten_fields?)\\b")   ~ 10L,
+    str_detect(folder, "(?:_20_fields|twenty_fields?)\\b")~ 20L,
     TRUE ~ NA_integer_
   )
 }
@@ -235,10 +244,14 @@ rmse_plot_df <- rmse_tbl_raw %>%
   mutate(
     row_lab = recode(Model, !!!model_to_row),
     col_lab = factor(`#field`,
-                     levels = c(1, 5, 10),
+                     levels = c(1, 2, 3, 4, 5, 10, 20),
                      labels = c("Number of fields: 1",
+                                "Number of fields: 2",
+                                "Number of fields: 3",
+                                "Number of fields: 4",
                                 "Number of fields: 5",
-                                "Number of fields: 10"))
+                                "Number of fields: 10",
+                                "Number of fields: 20"))
   )
 
 #  check 
@@ -299,8 +312,8 @@ rmse_df <- rmse_tbl_raw %>%
       "NO_RF"      = "NO_RF",
       .default     = Model
     ),
-    field_f = factor(`#field`, levels = c(1, 5, 10),
-                     labels = c("1 field", "5 fields", "10 fields"))
+    field_f = factor(`#field`, levels = c(1, 2, 3, 4, 5, 10, 20),
+                     labels = c("1 field", "2 fields", "3 fields", "4 fields",  "5 fields", "10 fields", "20 fields"))
   )
 
 # 3) summary stats 
@@ -431,5 +444,46 @@ p_rel <- ggplot(rel, aes(x = field_f, y = pct_impr, fill = Model)) +
   theme_bw()
 
 p_rel
+
+```
+
+# Best model by order
+
+```{r}
+library(dplyr)
+library(stringr)
+
+best_models <- rmse_summary %>%
+  mutate(field_n = as.numeric(str_extract(field_f, "\\d+"))) %>%
+  group_by(field_n) %>%
+  #  the best model 
+  slice_min(order_by = mean, with_ties = FALSE) %>%
+  ungroup() %>%
+  # order by RMSE 
+  arrange(mean, field_n) %>%
+  select(Model, field_f, mean)
+
+
+## Vis
+
+library(gt)
+
+best_models %>%
+  gt() %>%
+  tab_header(
+    title = "Best Models by Field Count",
+    subtitle = "Ordered by lowest mean RMSE"
+  ) %>%
+  fmt_number(
+    columns = c(mean),
+    decimals = 3
+  ) %>%
+  cols_label(
+    field_f = "# Fields",
+    mean    = "mean RMSE"
+  
+  ) %>%
+  tab_options(table.font.size = "small")
+
 
 ```
