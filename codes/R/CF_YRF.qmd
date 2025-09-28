@@ -1,0 +1,371 @@
+---
+title: "CF Loop"
+format:
+  html:
+    number-sections: true
+    number-depth: 1
+    theme: flatly
+    toc: true
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+## Packages and functions
+```{r setup_not_remove, echo=FALSE, include = F}
+#--- packages ---#
+library(tidyverse)
+library(data.table)
+library(mgcv)
+library(spatialsample)
+library(parallel)
+library(sf)
+library(grf)
+library(ranger)
+library(xgboost)
+library(mgcv)
+library(here)
+library(reticulate)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(pasim)
+
+
+Sys.setenv(
+  OMP_NUM_THREADS = "1",
+  OPENBLAS_NUM_THREADS = "1",
+  MKL_NUM_THREADS = "1",
+  VECLIB_MAXIMUM_THREADS = "1"  # macOS Accelerate safeguard
+)
+
+
+#--- python functions ---#
+# use_condaenv("cf_conda311", required = TRUE)
+# Apple M2
+use_condaenv("cf_conda311",
+             conda = "/Users/monamousavi/miniforge3/bin/conda",
+             required = TRUE)
+py_config()
+py_run_string("from econml.dml import CausalForestDML; print('CausalForestDML imported OK')")
+
+
+#--- R functions ---#
+source(here("codes", "R", "Utility.R"))
+
+#--- python functions ---#
+source_python(here::here("codes/Python/run_CF_c.py"))
+```
+
+## load data
+
+
+```{r}
+#raw_sim_data <- readRDS(here::here("data/raw_sim_data.rds"))
+
+# how many fields to train on?
+n_fields <- 20
+
+
+splits_file <- here(
+  "data", "train_test_split",
+  sprintf("train_test_splits_%dfields.csv", n_fields)
+)
+output_dir <- here(
+  "results",
+  sprintf("CF_outcome_%d_fields", n_fields)
+)
+if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+
+progress_csv <- file.path(output_dir, "progress.csv")
+
+# ─── LOAD SPLITS ────────────────────────────────────────────────────────────────
+
+train_test_splits <- read_csv(splits_file)
+
+```
+
+
+
+# CF YRF
+
+
+```{r}
+# ── EONR subfolder ────────────────────────────────────────────────
+eonr_dir <- file.path(output_dir, "eonr")
+if (!dir.exists(eonr_dir)) dir.create(eonr_dir, recursive = TRUE)
+
+## ── Loop over test sims ───────────────────────────────────────────────────────
+#for (i in seq_len(nrow(train_test_splits)))
+for (i in seq_len(1)){
+#for (i in seq_len(nrow(train_test_splits))) {
+  test_sim_id <- train_test_splits$test_id[i]
+  out_fn <- file.path(output_dir, sprintf("sim_%03d.rds", as.integer(test_sim_id)))
+
+  # skip if already saved
+  if (file.exists(out_fn)) {
+    message("Skipping sim ", test_sim_id, " (already saved)")
+    next
+  }
+
+  tryCatch(
+    {
+      ## 1) train/test IDs
+      split_row     <- train_test_splits[i, ]
+      train_sim_ids <- as.integer(unlist(split_row[paste0("train_", 1:n_fields)]))
+      sim_id_ls     <- c(train_sim_ids, test_sim_id)
+
+      ## 2) train & test data
+      data <- raw_sim_data$reg_data[[1]] %>%
+        .[sim %in% sim_id_ls, ] %>%
+        .[, .(sim, data)] %>%
+        tidyr::unnest(cols = c(data)) %>%
+        as.data.table()
+
+      train_data <- data[sim != test_sim_id, ]
+      test_data  <- raw_sim_data$reg_data[[1]] %>%
+        .[sim == test_sim_id, ] %>%
+        .[, .(sim, data)] %>%
+        tidyr::unnest(cols = c(data)) %>%
+        as.data.table()
+
+      ## 3) CF 
+      x_vars <- c("Nk", "plateau", "b0")
+      T_info <- prepare_T_mat(formula(yield ~ s(N, k = 4), m = 2), data = train_data)
+      Y      <- train_data[, yield]
+      X      <- as.matrix(train_data[, ..x_vars])
+      W      <- X
+      X_test <- as.matrix(test_data[, ..x_vars])
+
+      ## 4) run cf in python
+      Sys.setenv(
+        OMP_NUM_THREADS      = "1",
+        MKL_NUM_THREADS      = "1",
+        KMP_AFFINITY         = "disabled",
+        KMP_DUPLICATE_LIB_OK = "TRUE"
+      )
+
+      te_hat_cf <- run_CF_c_py(
+        Y,
+        T_info$T_sp,
+        X,
+        W,
+        n_estimators = 2000
+      )
+      te_info <- get_te(te_hat_cf, test_data, x_vars, "aunit_id")
+
+      ## 5) Response curves
+      T_seq <- train_data[, seq(min(N), max(N), length = 100)]
+      response_data <- find_response_semi(T_seq, T_info, te_info)
+      
+out_dir <- here::here(
+  "results",
+  "yield_response_function_for_one_iteration"
+)
+if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+
+saveRDS(
+  list(
+    te_hat_cf     = te_hat_cf,
+    te_info       = te_info,
+    T_seq         = T_seq,
+    response_data = response_data,
+    test_data     = test_data,
+    train_data    = train_data
+  ),
+  file = file.path(out_dir, sprintf("YRF_CF_%dfields.rds", n_fields))
+)
+
+
+
+})
+      
+}
+
+
+```
+
+# Post-estimation analysis
+```{r}
+cf_results <- readRDS(here::here("Results/yield_response_function_for_one_iteration/YRF_CF_10fields.rds"))
+```
+
+
+## Visualization of yield response curve fit
+
+```{r}
+test_data <- cf_results$test_data
+train_data <- cf_results$train_data
+repsponse_data <- cf_results$repsponse_data
+
+true_response <-
+  test_data[, .(aunit_id, b0, b1, b2, Nk)] %>%
+  .[, ] %>%
+  expand_grid_df(., data.table(N = train_data[, seq(min(N), max(N), length = 100)])) %>%
+  .[, yield := gen_yield_QP(b0, b1, b2, Nk, N)]
+
+check_id <- test_data[order(Nk), aunit_id] %>%
+  .[seq(1, nrow(test_data), length = 5)] %>%
+  .[-1]
+
+cf_curves <-
+  response_data[aunit_id %in% check_id, ] %>% .[, type := "Estiamated by CF"]
+
+true_curves <-
+  true_response[aunit_id %in% check_id, ] %>%
+  .[, type := "True"] %>%
+  .[, .(aunit_id, N, yield, type)] %>%
+  setnames("N", "T")
+
+yield_intercept <- true_curves[, .(yield = mean(yield)), by = aunit_id]
+
+yield_adjustment <-
+  cf_curves[, .(est = mean(est)), by = aunit_id] %>%
+  yield_intercept[., on = "aunit_id"] %>%
+  .[, yield_adj := yield - est] %>%
+  .[, .(aunit_id, yield_adj)]
+
+cf_curves <-
+  yield_adjustment[cf_curves, on = "aunit_id"] %>%
+  .[, yield := est + yield_adj] %>%
+  .[, .(aunit_id, yield, T, type)]
+
+curves_data_il <-
+  rbind(cf_curves, true_curves) %>%
+  .[, type := factor(type, levels = c("True", "Estiamated by CF"))] %>%
+  .[, group := .GRP, by = aunit_id]
+
+g_response_estimated <-
+  ggplot() +
+  geom_line(
+    data = curves_data_il[T <= 260, ],
+    aes(
+      y = yield,
+      x = T,
+      color = factor(group),
+      linetype = type
+    )
+  ) +
+  scale_color_discrete(name = "aunit_id Number") +
+  scale_linetype_discrete(name = "Curve Type") +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  ylab("Corn Yield (bu/acre)") +
+  xlab("Nitrogen Application Rate (lb/acre)")
+
+# saveRDS(
+#   object = g_response_estimated,
+#   file   = here::here("Results", "g_response_estimated.rds")
+# )
+
+```
+
+# All YRF
+
+```{r}
+#--- libraries ---#
+library(pasim)
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(here)
+library(purrr)
+library(tidyr)     
+library(patchwork) 
+
+
+process_cf_file <- function(file_path, label) {
+  cf_results <- readRDS(file_path)
+
+  test_data     <- cf_results$test_data
+  train_data    <- cf_results$train_data
+  response_data <- cf_results$response_data
+
+  # true response curves
+  true_response <- test_data[, .(aunit_id, b0, b1, b2, Nk)] %>%
+    tidyr::expand_grid(N = seq(min(train_data$N),
+                               max(train_data$N),
+                               length = 100)) %>%
+    as.data.table() %>%
+    .[, yield := gen_yield_QP(b0, b1, b2, Nk, N)]
+
+  # pick a few ids
+  check_id <- test_data[order(Nk), aunit_id] %>%
+    .[seq(1, nrow(test_data), length = 5)] %>%
+    .[-1]
+
+  # estimated by CF
+  cf_curves <- response_data[aunit_id %in% check_id, ] %>%
+    .[, type := "Estimated by CF"]
+
+  # true curves
+  true_curves <- true_response[aunit_id %in% check_id, ] %>%
+    .[, type := "True"] %>%
+    .[, .(aunit_id, N, yield, type)] %>%
+    setnames("N", "T")
+
+  # adjust intercepts
+  yield_intercept <- true_curves[, .(yield = mean(yield)), by = aunit_id]
+  yield_adjustment <- cf_curves[, .(est = mean(est)), by = aunit_id] %>%
+    yield_intercept[., on = "aunit_id"] %>%
+    .[, yield_adj := yield - est] %>%
+    .[, .(aunit_id, yield_adj)]
+
+  cf_curves <- yield_adjustment[cf_curves, on = "aunit_id"] %>%
+    .[, yield := est + yield_adj] %>%
+    .[, .(aunit_id, yield, T, type)]
+
+  # combine
+  curves_data_il <- rbind(cf_curves, true_curves) %>%
+    .[, type := factor(type, levels = c("True", "Estimated by CF"))] %>%
+    .[, group := .GRP, by = aunit_id]
+
+  # plot
+  ggplot() +
+    geom_line(
+      data = curves_data_il[T <= 260, ],
+      aes(y = yield, x = T, color = factor(group), linetype = type)
+    ) +
+    scale_color_discrete(name = "aunit_id Number") +
+    scale_linetype_discrete(name = "Curve Type") +
+    theme_bw() +
+    theme(legend.position = "bottom") +
+    ylab("Corn Yield (bu/acre)") +
+    xlab("Nitrogen Application Rate (lb/acre)") +
+    ggtitle(paste("Yield Response Function -", label))
+}
+
+
+file_labels <- c("1fields", "3fields", "5fields", "10fields", "20fields")
+file_paths <- here::here(
+  "Results/yield_response_function_for_one_iteration",
+  paste0("YRF_CF_", file_labels, ".rds")
+)
+
+#---all plots ---#
+all_plots <- map2(file_paths, file_labels, process_cf_file)
+
+
+# saveRDS(
+#   all_plots,
+#   here::here("results/yield_response_function_for_one_iteration", "all_YRF_plots_CF.rds")
+# )
+
+```
+
+# Visualize YRF
+
+```{r}
+
+
+all_plots <- readRDS(here::here("results/yield_response_function_for_one_iteration", "all_YRF_plots_CF.rds"))
+
+
+# Example one plot
+#all_plots[[1]]
+
+# arrange 
+wrap_plots(all_plots, ncol = 2)
+
+```
