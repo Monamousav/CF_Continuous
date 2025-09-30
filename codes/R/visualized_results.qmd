@@ -60,6 +60,7 @@ plot_yield_response("SO_RF",  10, global_models = models_to_compare)
 # create per-sim RMSE table 
 # ============================
 
+
 # ---- Packages ----
 library(tidyverse)
 library(fs)
@@ -67,49 +68,42 @@ library(here)
 library(readr)
 library(stringr)
 
-# ---- Constants: all 18 result folders ----
-MODEL_DIRS <- c(
-  "CF_outcome_1_fields","CF_outcome_5_fields","CF_outcome_10_fields",
-  "RANN_outcome_one_field","RANN_outcome_five_fields","RANN_outcome_ten_fields",
-  "Simple_ANN_outcome_one_field","Simple_ANN_outcome_two_fields","Simple_ANN_outcome_three_fields", "Simple_ANN_outcome_four_fields",
-  "Simple_ANN_outcome_five_fields","Simple_ANN_outcome_ten_fields","Simple_ANN_outcome_twenty_fields",
-  "NO_RF_one_field","NO_RF_five_fields","NO_RF_ten_fields",
-  "HalfRRF_one_field","HalfRRF_five_fields","HalfRRF_ten_fields",
-  "half_RANN_outcome_one_field","half_RANN_outcome_five_fields","half_RANN_outcome_ten_fields", "half_RANN_outcome_twenty_fields"
-)
-
 EXPECTED_ROWS <- 1440L
 
-# ---- function ----
+# --------
 rmse <- function(x, y) sqrt(mean((x - y)^2, na.rm = TRUE))
 
+# number of fields 
 parse_n_fields <- function(folder) {
-  case_when(
-    str_detect(folder, "(?:_1_fields|one_field)\\b")      ~ 1L,
-    str_detect(folder, "(?:_2_fields|two_fields?)\\b")    ~ 2L,
-    str_detect(folder, "(?:_3_fields|three_fields?)\\b")  ~ 3L,
-    str_detect(folder, "(?:_4_fields|four_fields?)\\b")   ~ 4L,
-    str_detect(folder, "(?:_5_fields|five_fields?)\\b")   ~ 5L,
-    str_detect(folder, "(?:_10_fields|ten_fields?)\\b")   ~ 10L,
-    str_detect(folder, "(?:_20_fields|twenty_fields?)\\b")~ 20L,
-    TRUE ~ NA_integer_
-  )
+  f <- str_to_lower(folder)
+  
+  num <- str_match(f, "(_|\\b)(\\d+)_?fields?\\b")[,3]
+  if (!is.na(num)) return(as.integer(num))
+  
+  words <- c("one"=1,"two"=2,"three"=3,"four"=4,"five"=5,
+             "ten"=10,"twenty"=20,"thirty"=30,"forty"=40)
+  word <- str_match(f, "(one|two|three|four|five|ten|twenty|thirty|forty)_?fields?")[,2]
+  if (!is.na(word)) return(words[[word]])
+  
+  NA_integer_
 }
 
+# --- Model name mapping ---
 parse_model <- function(folder) {
   f <- str_to_lower(folder)
+  
   case_when(
-    str_starts(f, "cf_")             ~ "CF",
-    str_starts(f, "rann_outcome")    ~ "RANN",
-    str_starts(f, "half_rann")       ~ "HalfRANN",
-    str_starts(f, "simple_ann")      ~ "Simple_ANN",
-    str_starts(f, "no_rf")           ~ "NO_RF",
-    str_starts(f, "halfrrf")         ~ "HalfRRF",
-    TRUE                             ~ folder
+    str_detect(f, "^cf")          ~ "CF",
+    str_detect(f, "^rann")        ~ "DO_ANN",
+    str_detect(f, "^half_rann")   ~ "SO_ANN",
+    str_detect(f, "^simple_ann")  ~ "No_ANN",
+    str_detect(f, "^no_rf")       ~ "NO_RF",
+    str_detect(f, "^halfrrf")     ~ "SO_RF",
+    TRUE                          ~ NA_character_
   )
 }
 
-# Read any object: RDS, CSV
+# read RDS, CSV
 read_any <- function(f) {
   ext <- tolower(path_ext(f))
   if (ext == "csv") return(read_csv(f, show_col_types = FALSE))
@@ -121,7 +115,6 @@ read_any <- function(f) {
   stop("Unsupported or unreadable file: ", f)
 }
 
-# Standardize to two numeric vectors (per-sim rows)
 read_eonr_file <- function(f) {
   obj <- read_any(f)
   if (is.list(obj) && all(c("pred","true") %in% names(obj))) {
@@ -137,35 +130,31 @@ read_eonr_file <- function(f) {
   }
 }
 
-# 
+# list files in dir 
 files_in_dir <- function(dir_path) {
   dir_ls(dir_path, type = "file", recurse = TRUE) %>%
-    # Names like sim_055_eonr or EONR_1 
     keep(~ str_detect(path_file(.x),
-           regex("^(sim_\\d+(?:_eonr)?|EONR_\\d+)(?:\\.(rds|rda|rdata|csv))?$",
-                 ignore_case = TRUE))) %>%
-    # drop anything starting with "validation"
+                      regex("^(sim_\\d+(?:_eonr)?|EONR_\\d+)(?:\\.(rds|rda|rdata|csv))?$",
+                            ignore_case = TRUE))) %>%
     discard(~ str_detect(path_file(.x), regex("^validation", ignore_case = TRUE))) %>%
-    # drop macOS Icon files
     discard(~ grepl("Icon", basename(.x), fixed = TRUE))
 }
 
-# get sim id from filename base
+# extract sim id from filename
 extract_sim_id <- function(base) {
   m <- str_match(base, regex("^(?:sim_(\\d+)(?:_eonr)?|EONR_(\\d+))", ignore_case = TRUE))
   coalesce(as.integer(m[,2]), as.integer(m[,3]))
 }
 
-# 
 row_from_file <- function(f, model, n_f, expected_rows = EXPECTED_ROWS) {
   tryCatch({
     base <- path_ext_remove(path_file(f))
     sim_id <- extract_sim_id(base)
     if (is.na(sim_id)) return(NULL)
-
+    
     e <- read_eonr_file(f)
     n_rows <- length(e$pred)
-
+    
     tibble(
       sim      = sim_id,
       Model    = model,
@@ -178,27 +167,28 @@ row_from_file <- function(f, model, n_f, expected_rows = EXPECTED_ROWS) {
   }, error = function(e) NULL)
 }
 
-# ---- create table  ----
+# --- RMSE table ----
 build_rmse_table <- function(base_dir = here("results"),
-                             include_dirs = MODEL_DIRS,
                              expected_rows = EXPECTED_ROWS) {
-  dirs <- file.path(base_dir, include_dirs)
-  dirs <- dirs[dir_exists(dirs)]
-
+  
+  dirs <- fs::dir_ls(base_dir, type = "directory", recurse = FALSE) %>%
+    keep(~ str_detect(basename(.x),
+                      regex("^(cf|rann|half_rann|simple_ann|no_rf|halfrrf)",
+                            ignore_case = TRUE)))
+  
   map_dfr(dirs, function(dir_path) {
     folder <- path_file(dir_path)
-    model  <- parse_model(folder)
+    model  <- parse_model(folder)   
     n_f    <- parse_n_fields(folder)
-
+    
     files <- files_in_dir(dir_path)
-
+    
     map_dfr(files, row_from_file, model = model, n_f = n_f,
             expected_rows = expected_rows)
   }) %>%
-    filter(!is.na(sim), !is.na(`#field`), !is.na(RMSE)) %>%
+    filter(!is.na(Model), !is.na(`#field`), !is.na(RMSE)) %>%
     arrange(Model, `#field`, sim)
 }
-
 
 ```
 
@@ -208,10 +198,8 @@ build_rmse_table <- function(base_dir = here("results"),
 # ---- run it (all models) ----
 rmse_tbl_raw <- build_rmse_table(
   base_dir = here("results"),
-  include_dirs = MODEL_DIRS,
   expected_rows = EXPECTED_ROWS
 )
-
 
 # save
 # write_csv(rmse_tbl_raw, here("results", "rmse_table_all_models.csv"))
@@ -229,35 +217,37 @@ library(dplyr)
 library(ggplot2)
 library(stringr)
 
-#  model names: row labels in the graph
-model_to_row <- c(
-  "Simple_ANN" = "No_ANN",
-  "RANN"       = "DO_ANN",
-  "NO_RF"      = "NO_RF",
-  "HalfRANN" = "SO_ANN",
-  "HalfRRF"  = "SO_RF",
-   "CF"       = "CF"
-)
+# -- labels for models ---
+model_names <- function(models) {
+  map <- c(
+    "Simple_ANN" = "No_ANN",
+    "RANN"       = "DO_ANN",
+    "NO_RF"      = "NO_RF",
+    "HALFRANN"   = "SO_ANN",
+    "HALFRRF"    = "SO_RF",
+    "CF"         = "CF"
+  )
+  # use mapping if available, else leave unchanged
+  out <- unname(map[models])
+  ifelse(is.na(out), models, out)
+}
 
+# --- plotting data ---
 rmse_plot_df <- rmse_tbl_raw %>%
-  filter(ok_rows, Model %in% names(model_to_row)) %>%
+  filter(ok_rows) %>%
   mutate(
-    row_lab = recode(Model, !!!model_to_row),
-    col_lab = factor(`#field`,
-                     levels = c(1, 2, 3, 4, 5, 10, 20),
-                     labels = c("Number of fields: 1",
-                                "Number of fields: 2",
-                                "Number of fields: 3",
-                                "Number of fields: 4",
-                                "Number of fields: 5",
-                                "Number of fields: 10",
-                                "Number of fields: 20"))
+    row_lab = model_names(Model),
+    col_lab = factor(
+      `#field`,
+      levels = sort(unique(`#field`)),   # discover field counts
+      labels = paste0("Number of fields: ", sort(unique(`#field`)))
+    )
   )
 
-#  check 
+# --- Check ---
 rmse_plot_df %>% count(row_lab, col_lab)
 
-# --- setup ---
+# ------
 xmin <- 0
 nice_ceiling <- function(x, base = 5) base * ceiling(x / base)
 xmax <- nice_ceiling(max(rmse_plot_df$RMSE, na.rm = TRUE), base = 5)
@@ -269,9 +259,11 @@ binwidth <- (xmax - xmin) / bins
 p <- ggplot(rmse_plot_df, aes(x = RMSE)) +
   geom_histogram(binwidth = binwidth, boundary = 0, closed = "left") +
   facet_grid(row_lab ~ col_lab, scales = "fixed") +  
-  scale_x_continuous(limits = c(xmin, xmax),
-                     breaks = seq(xmin, xmax, length.out = 6),
-                     expand = c(0, 0)) +
+  scale_x_continuous(
+    limits = c(xmin, xmax),
+    breaks = seq(xmin, xmax, length.out = 6),
+    expand = c(0, 0)
+  ) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
   labs(x = "RMSE by iteration", y = "Count") +
   theme_bw() +
@@ -281,7 +273,6 @@ p <- ggplot(rmse_plot_df, aes(x = RMSE)) +
   )
 
 p
-
 # ggsave(here::here("results", "rmse_hist_3rows.png"), p, width = 12, height = 7, dpi = 300)
 
 ```
@@ -295,28 +286,21 @@ library(ggplot2)
 library(stringr)
 library(tidyr)
 
-
-# 
+# --- Prepare rmse_df ---
 rmse_df <- rmse_tbl_raw %>%
   dplyr::group_by(Model, `#field`, sim) %>%  
   dplyr::summarise(RMSE = dplyr::first(RMSE), .groups = "drop") %>%
-  # Rename models
   dplyr::mutate(
-    Model = dplyr::recode(
-      Model,
-      "Simple_ANN" = "NO_ANN",
-      "HalfRANN"   = "SO_ANN",
-      "RANN"       = "DO_ANN",
-      "HalfRRF"    = "SO_RF",
-      "CF"         = "CF",
-      "NO_RF"      = "NO_RF",
-      .default     = Model
-    ),
-    field_f = factor(`#field`, levels = c(1, 2, 3, 4, 5, 10, 20),
-                     labels = c("1 field", "2 fields", "3 fields", "4 fields",  "5 fields", "10 fields", "20 fields"))
+    # Field labels (auto from unique values)
+    field_f = factor(
+      `#field`,
+      levels = sort(unique(`#field`)),
+      labels = paste0(sort(unique(`#field`)),
+                      ifelse(sort(unique(`#field`)) == 1, " field", " fields"))
+    )
   )
 
-# 3) summary stats 
+# --- Summary stats ---
 rmse_summary <- rmse_df %>%
   dplyr::group_by(Model, field_f) %>%
   dplyr::summarise(
@@ -328,7 +312,10 @@ rmse_summary <- rmse_df %>%
     lower  = mean + qt(0.025, df = n - 1) * se,
     upper  = mean + qt(0.975, df = n - 1) * se,
     .groups = "drop"
-  )
+  ) %>%
+  # remove 2-field and 4-field combinations
+  dplyr::filter(!field_f %in% c("2 fields", "4 fields"))
+
 
 ```
 
@@ -447,7 +434,7 @@ p_rel
 
 ```
 
-# Best model by order
+# Best model by the numbers of fields
 
 ```{r}
 library(dplyr)
@@ -471,7 +458,7 @@ library(gt)
 best_models %>%
   gt() %>%
   tab_header(
-    title = "Best Models by Field Count",
+    title = "best models by #field",
     subtitle = "Ordered by lowest mean RMSE"
   ) %>%
   fmt_number(
@@ -479,7 +466,7 @@ best_models %>%
     decimals = 3
   ) %>%
   cols_label(
-    field_f = "# Fields",
+    field_f = "# fields",
     mean    = "mean RMSE"
   
   ) %>%
