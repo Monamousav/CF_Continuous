@@ -474,3 +474,17 @@ best_models %>%
 
 
 ```
+
+# YRF for CF
+
+```{r}
+all_plots <- readRDS(here::here("results/yield_response_function_for_one_iteration", "all_YRF_plots_CF.rds"))
+
+
+# Example one plot
+#all_plots[[1]]
+
+# arrange 
+wrap_plots(all_plots, ncol = 2)
+
+```
