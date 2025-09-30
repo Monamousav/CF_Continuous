@@ -42,6 +42,11 @@ Sys.setenv(
 
 #--- python functions ---#
 use_condaenv("cf_conda311", required = TRUE)
+
+# use_condaenv("cf_conda311",
+#              conda = "/Users/monamousavi/miniforge3/bin/conda",
+#              required = TRUE)
+
 py_config()
 py_run_string("from econml.dml import CausalForestDML; print('CausalForestDML imported OK')")
 
@@ -57,10 +62,10 @@ source_python(here::here("codes/Python/run_CF_c.py"))
 
 
 ```{r}
-raw_sim_data <- readRDS(here::here("data/raw_sim_data.rds"))
+#raw_sim_data <- readRDS(here::here("data/raw_sim_data.rds"))
 
 # how many fields to train on?
-n_fields <- 10
+n_fields <- 20
 
 
 splits_file <- here(
@@ -227,7 +232,7 @@ for (i in seq_len(nrow(train_test_splits))) {
       )
 
       # Free ram 
-      rm(res, te_hat_cf, te_info, response_data, train_data, test_data, e)
+      rm(te_hat_cf, te_info, response_data, train_data, test_data, e)
       if (i %% 10 == 0) gc()
     },
     error = function(e) {
