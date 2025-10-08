@@ -1,0 +1,94 @@
+---
+title: "CF corner solution"
+format:
+  html:
+    number-sections: true
+    number-depth: 1
+    theme: flatly
+    toc: true
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+## Packages and functions
+```{r setup_not_remove, echo=FALSE, include = F}
+#--- packages ---#
+library(data.table)
+library(here)
+library(tidyr)
+```
+
+## load data and find corner solutions
+```{r}
+
+# raw sim data
+# raw_sim_data <- readRDS(here("data", "raw_sim_data.rds"))
+
+# List of field settings you ran
+n_fields_list <- c(1, 3, 5, 10, 20)
+
+# Function to process one n_fields case
+process_field_setting <- function(n_fields) {
+  
+  # train/test splits for this field count
+  splits_file <- here("data", "train_test_split",
+                      sprintf("train_test_splits_%dfields.csv", n_fields))
+  splits <- fread(splits_file)
+  
+  # estimated EONR results for this field count
+  eonr_dir <- here("results", sprintf("CF_outcome_%d_fields", n_fields))
+  files <- list.files(eonr_dir, pattern = "_eonr\\.rds$", full.names = TRUE)
+  eonr_all <- rbindlist(lapply(files, readRDS))
+  
+  # Loop on all test sims
+  corner_results <- lapply(1:nrow(splits), function(i) {
+    
+    test_id <- splits$test_id[i]
+    train_ids <- as.integer(unlist(splits[i, grep("^train_", names(splits)), with = FALSE]))
+    
+    # get all train sims used for this test (1, 3, 5, 10, 20)
+    train_data <- raw_sim_data$reg_data[[1]] %>%
+      .[sim %in% train_ids, ] %>%
+      .[, .(sim, data)] %>%
+      tidyr::unnest(cols = c(data)) %>%
+      as.data.table()
+    
+    N_min <- min(train_data$N)
+    N_max <- max(train_data$N)
+    
+    # get estimated opt_N_hat for this test sim
+    eonr_sim <- eonr_all[sim == test_id]
+    
+    #  corner solutions
+    eonr_sim[, corner := (opt_N_hat == N_min | opt_N_hat == N_max)]
+    eonr_sim[, n_fields := n_fields]
+    
+    return(eonr_sim)
+  })
+  
+  return(rbindlist(corner_results))
+}
+
+# run for all field counts
+corner_all <- rbindlist(lapply(n_fields_list, process_field_setting))
+
+# summarize: % of corner solutions by n_fields
+corner_summary <- corner_all[, .(
+  n_total = .N,
+  n_corners = sum(corner, na.rm = TRUE)
+), by = n_fields]
+
+corner_summary
+
+# save 
+# saveRDS(corner_summary,
+#         here("results", "corner_summary.rds"))
+
+
+
+```
+
+
+
