@@ -59,5 +59,9 @@ if __name__ == "__main__":
  
 # === CF using saved spline columns (T_1, T_2, T_3, …) ===
     run_CF_savedT("CF_savedT", 1, data_2nd_stage, evall_N_seq)
+    #run_CF_savedT("CF_savedT", 3, data_2nd_stage, evall_N_seq)
+    #run_CF_savedT("CF_savedT", 5, data_2nd_stage, evall_N_seq)
+   #run_CF_savedT("CF_savedT", 10, data_2nd_stage, evall_N_seq)
+    #run_CF_savedT("CF_savedT", 20, data_2nd_stage, evall_N_seq)
 
   
