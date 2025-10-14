@@ -79,8 +79,10 @@ def run_model(model_type, n_fields, data_2nd_stage, evall_N_seq, device):  # <- 
     split_csv_path = f'./data/train_test_split/train_test_splits_{n_fields}fields.csv'
     folder_map = {
         ("NO_RF", 1): "NO_RF_one_field",
+        ("NO_RF", 3): "NO_RF_three_fields",
         ("NO_RF", 5): "NO_RF_five_fields",
-        ("NO_RF", 10): "NO_RF_ten_fields"
+        ("NO_RF", 10): "NO_RF_ten_fields",
+        ("NO_RF", 20): "NO_RF_twenty_fields"
     }
     folder_name = folder_map.get((model_type, n_fields))
     if folder_name is None:
