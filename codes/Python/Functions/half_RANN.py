@@ -131,6 +131,7 @@ def run_model(model_type, n_fields, data_2nd_stage, evall_N_seq, device):
     split_csv_path = f'./data/train_test_split/train_test_splits_{n_fields}fields.csv'
     folder_map = {
         ("half_RANN", 1): "half_RANN_outcome_one_field",
+        ("half_RANN", 3): "half_RANN_outcome_three_fields",
         ("half_RANN", 5): "half_RANN_outcome_five_fields",
         ("half_RANN", 10): "half_RANN_outcome_ten_fields",
         ("half_RANN", 20): "half_RANN_outcome_twenty_fields" 
