@@ -9,11 +9,11 @@ from sklearn.preprocessing import StandardScaler
 import subprocess
 import sys
 
-# === Ensure ipywidgets is installed (for tqdm / Jupyter progress bar) ===
+# ===  ipywidgets is installed (for tqdm / Jupyter progress bar) ===
 import subprocess
 import sys
 
-# === Ensure ipywidgets is installed (for tqdm / Jupyter progress bar) ===
+# ===  ipywidgets is installed (for tqdm / Jupyter progress bar) ===
 try:
     import ipywidgets
 except ImportError:
@@ -34,7 +34,7 @@ except ImportError:
 def train_cf_model_from_splits(data_2nd_stage, eval_N_seq, split_csv_path, folder_name):
     """
     Train EconML CausalForestDML on raw (non-orthogonalized) data
-    to match the R 'CF Loop' logic.
+    
     """
 
     # --- Setup results folder ---
