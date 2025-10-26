@@ -30,24 +30,40 @@ source(here("codes", "R", "visualize_yield_response_function.R"))
 # plot_yield_response(model = "SO_RF", n_fields = 5) 
 
 
-models_to_compare <- c("NO_ANN", "DO_ANN", "SO_ANN", "NO_RF", "SO_RF")
+models_to_compare <- c("NO_ANN", "DO_ANN", "SO_ANN", "NO_RF", "SO_RF", "CF")
 
 # 
 plot_yield_response("NO_ANN", 1, global_models = models_to_compare)
+plot_yield_response("NO_ANN", 3, global_models = models_to_compare)
 plot_yield_response("NO_ANN", 5, global_models = models_to_compare)
 plot_yield_response("NO_ANN", 10, global_models = models_to_compare)
+plot_yield_response("NO_ANN", 20, global_models = models_to_compare)
 plot_yield_response("DO_ANN", 1, global_models = models_to_compare)
+plot_yield_response("DO_ANN", 3, global_models = models_to_compare)
 plot_yield_response("DO_ANN", 5, global_models = models_to_compare)
 plot_yield_response("DO_ANN", 10, global_models = models_to_compare)
+plot_yield_response("DO_ANN", 20, global_models = models_to_compare)
 plot_yield_response("SO_ANN", 1, global_models = models_to_compare)
+plot_yield_response("SO_ANN", 3, global_models = models_to_compare)
 plot_yield_response("SO_ANN", 5, global_models = models_to_compare)
 plot_yield_response("SO_ANN", 10, global_models = models_to_compare)
+plot_yield_response("SO_ANN", 20, global_models = models_to_compare)
 plot_yield_response("NO_RF",  1, global_models = models_to_compare)
+plot_yield_response("NO_RF",  3, global_models = models_to_compare)
 plot_yield_response("NO_RF",  5, global_models = models_to_compare)
 plot_yield_response("NO_RF",  10, global_models = models_to_compare)
+plot_yield_response("NO_RF",  20, global_models = models_to_compare)
 plot_yield_response("SO_RF",  1, global_models = models_to_compare)
+plot_yield_response("SO_RF",  3, global_models = models_to_compare)
 plot_yield_response("SO_RF",  5, global_models = models_to_compare)
 plot_yield_response("SO_RF",  10, global_models = models_to_compare)
+plot_yield_response("SO_RF",  20, global_models = models_to_compare)
+plot_yield_response("CF", 1, global_models = models_to_compare)
+plot_yield_response("CF", 3, global_models = models_to_compare)
+plot_yield_response("CF", 5, global_models = models_to_compare)
+plot_yield_response("CF", 10, global_models = models_to_compare)
+plot_yield_response("CF", 20, global_models = models_to_compare)
+
 ```
 
 
@@ -60,7 +76,7 @@ plot_yield_response("SO_RF",  10, global_models = models_to_compare)
 # create per-sim RMSE table 
 # ============================
 
-# ---- Packages ----
+
 library(tidyverse)
 library(fs)
 library(here)
@@ -69,30 +85,30 @@ library(stringr)
 
 EXPECTED_ROWS <- 1440L
 
-# --------
+# ---- RMSE function ----
 rmse <- function(x, y) sqrt(mean((x - y)^2, na.rm = TRUE))
 
-# number of fields
+# ---- number of fields parser ----
 parse_n_fields <- function(folder) {
   f <- str_to_lower(folder)
   
+  # numeric pattern
   num <- str_match(f, "(_|\\b)(\\d+)_?fields?\\b")[,3]
   if (!is.na(num)) return(as.integer(num))
   
-  words <- c("one"=1,"two"=2,"three"=3,"four"=4,"five"=5,
-             "ten"=10,"twenty"=20,"thirty"=30,"forty"=40)
-  word <- str_match(f, "(one|two|three|four|five|ten|twenty|thirty|forty)_?fields?")[,2]
+  # text pattern
+  words <- c("one"=1,"three"=3,"five"=5,"ten"=10,"twenty"=20)
+  word <- str_match(f, "(one|three|five|ten|twenty)_?fields?")[,2]
   if (!is.na(word)) return(words[[word]])
   
   NA_integer_
 }
 
-# --- model name mapping ---
+# ---- model name parser ----
 parse_model <- function(folder) {
   f <- str_to_lower(folder)
   
   case_when(
-    str_detect(f, "^cf_python")     ~ "CF_Python",
     str_detect(f, "^cf")            ~ "CF",
     str_detect(f, "^rann")          ~ "DO_ANN",
     str_detect(f, "^half_rann")     ~ "SO_ANN",
@@ -103,7 +119,7 @@ parse_model <- function(folder) {
   )
 }
 
-# read RDS, CSV
+# ---- read any file ----
 read_any <- function(f) {
   ext <- tolower(path_ext(f))
   if (ext == "csv") return(read_csv(f, show_col_types = FALSE))
@@ -115,10 +131,11 @@ read_any <- function(f) {
   stop("Unsupported or unreadable file: ", f)
 }
 
+# ---- read eonr file ----
 read_eonr_file <- function(f) {
   obj <- read_any(f)
   if (is.data.frame(obj) && all(c("opt_N_hat","opt_N") %in% names(obj))) {
-    list(pred = as.numeric(obj$opt_N_hat), true = as.numeric(obj$opt_N))  # CF or CF_python csv
+    list(pred = as.numeric(obj$opt_N_hat), true = as.numeric(obj$opt_N))
   } else if (is.list(obj) && all(c("opt_N_hat","opt_N") %in% names(obj))) {
     list(pred = as.numeric(obj$opt_N_hat), true = as.numeric(obj$opt_N))
   } else if (is.data.frame(obj) && all(c("pred","true") %in% names(obj))) {
@@ -128,7 +145,7 @@ read_eonr_file <- function(f) {
   }
 }
 
-# list files in dir 
+# ---- list valid files ----
 files_in_dir <- function(dir_path) {
   dir_ls(dir_path, type = "file", recurse = TRUE) %>%
     keep(~ str_detect(path_file(.x),
@@ -138,12 +155,13 @@ files_in_dir <- function(dir_path) {
     discard(~ grepl("Icon", basename(.x), fixed = TRUE))
 }
 
-# extract sim id from filename
+# ---- extract sim id ----
 extract_sim_id <- function(base) {
   m <- str_match(base, regex("^(?:sim_(\\d+)(?:_eonr)?|EONR_(\\d+))", ignore_case = TRUE))
   coalesce(as.integer(m[,2]), as.integer(m[,3]))
 }
 
+# ---- build one row ----
 row_from_file <- function(f, model, n_f, expected_rows = EXPECTED_ROWS) {
   tryCatch({
     base <- path_ext_remove(path_file(f))
@@ -165,19 +183,22 @@ row_from_file <- function(f, model, n_f, expected_rows = EXPECTED_ROWS) {
   }, error = function(e) NULL)
 }
 
-# --- RMSE table ----
+# ---- build RMSE table ----
 build_rmse_table <- function(base_dir = here("results"),
                              expected_rows = EXPECTED_ROWS) {
   
   dirs <- fs::dir_ls(base_dir, type = "directory", recurse = FALSE) %>%
     keep(~ str_detect(basename(.x),
-                      regex("^(cf|cf_python|rann|half_rann|simple_ann|no_rf|halfrrf)",
+                      regex("^(cf|cf_outcome|rann|half_rann|simple_ann|no_rf|halfrrf)",
                             ignore_case = TRUE)))
   
   map_dfr(dirs, function(dir_path) {
     folder <- path_file(dir_path)
-    model  <- parse_model(folder)   
+    model  <- parse_model(folder)
     n_f    <- parse_n_fields(folder)
+    
+    # only keep 1, 3, 5, 10, 20
+    if (!n_f %in% c(1, 3, 5, 10, 20)) return(NULL)
     
     files <- files_in_dir(dir_path)
     
@@ -187,7 +208,6 @@ build_rmse_table <- function(base_dir = here("results"),
     filter(!is.na(Model), !is.na(`#field`), !is.na(RMSE)) %>%
     arrange(Model, `#field`, sim)
 }
-
 ```
 
 # RMSE run
@@ -213,6 +233,8 @@ library(dplyr)
 library(ggplot2)
 library(stringr)
 
+rmse_tbl_raw <- readRDS(here("results", "rmse_tbl_raw.rds"))
+
 # -- label mapping for models ---
 model_names <- function(models) {
   map <- c(
@@ -221,8 +243,7 @@ model_names <- function(models) {
     "HALFRANN"   = "SO_ANN",
     "HALFRRF"    = "SO_RF",
     "NO_RF"      = "NO_RF",
-    "CF"         = "CF",
-    "CF_Python"  = "CF_Python"
+    "CF"         = "CF"
   )
   
   # normalize capitalization 
