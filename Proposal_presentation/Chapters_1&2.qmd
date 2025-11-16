@@ -1,0 +1,523 @@
+---
+title: "Chapter 1: A new model selection approach based on local economically optimal input rate"
+author:
+  - name: Taro Mieno$^*$
+  - name: Mona Mousavi$^*$
+  - name: David Bullock$^\dagger$
+institute:
+  - $^*$ University of Nebraska Lincoln
+  - $^\dagger$ University of Illinois Urbana Champaign 
+date: 06/12/2025
+format:
+  beamer:
+    theme: Singapore
+    navigation: horizontal
+    section-titles: false
+    slide-level: 2
+    fontsize: "10pt"
+header-includes: 
+- \logo{\ifnum\thepage>1\includegraphics[width=1cm]{nebraska-n.jpg}\fi}
+---
+
+```{r, include = FALSE}
+library(terra)
+library(sf)
+library(tidyterra)
+library(ggplot2)
+library(data.table)
+library(dplyr)
+library(flextable)
+```
+
+
+# Background and Research Objectives
+
+## Background
+
++ Uniform input management strategies can lead to both economic losses and environmental inefficiencies.
+
++ Variable-rate input management as a solution (accounts for spatial heterogeneity in crop input demand.
+
++ On-farm precision experiments (OFPE) as a promising way (GPS technologies and variable-rate applicators).
+  + Run on-farm agronomic trials and collect data
+  + \textcolor{blue}{Estimate how yield responds to nitrogen based on observed characteristics}
+  + Identify site-specific optimal nitrogen rates
+
+
+## Motivation
+
++ Machine learning approaches being increasingly used for estimating site-specific yield response functions
+  + identify the best model among several candidate ML approaches and also tuning hyper parameters via cross-validation as the key part of such process. 
+  
++ In all of the previous studies, the best model was selected based on their abilities to predict \textcolor{blue}{yield level} at the observation points (yield-based model selection).  
+
++ However, the ultimate goal is not to predict yield levels, but to estimate yield response (causal marginal impact of nitrogen on crop yield). 
+
+
+## Research Objective
+
++ Proposes an alternative to conventional yield-based model selection. Specifically, we select models based on their ability to predict local EONR using spatial cross-validation.
+
++ Evaluate this approach, through Monte Carlo simulations, and compare its performance against the standard yield-based selection method. 
+
+# Method
+
+Monte Carlo simulations with 500 iterations.
+
+Steps for a single iteration:
+
+  + Step 1: Generate OFPE experiment data
+  + Step 2: Identify the true best (most profitable VRA application rate) model among the five candidate models
+  + Step 3: Select the best model among the 5 candidate models based on
+    + yield (conventional approach)
+    + local-EONR (our approach)
+  + Step 4: Evaluate the model selection approaches  
+  
+The five candidate models:
+linear model, linear spatial error (SE) model, random forest (RF), boosted regression forest (BRF), and causal forest (CF).  
+
+## Data generation 
+
++ The data generated from a simulated corn production field (about 37.3 hectares) with spatially varying field characteristics.
+
++ One possible scenario of the spatial variability in the field characteristics is shown.
+
++ This study assumed the yield data were collected at the subplot level (total 1440 subplots).
+
+
+## The simulated OFPE field:
+```{r}
+#| echo: false
+#| fig-align: "center"
+#| out-width: "95%"
+knitr::include_graphics("~/Desktop/g_field_map.png")
+```
+
+## True yield responses
+
+The true yield is assumed to follow the quadratic plateau functional form as follows:
+
+$$
+y_{j, i}=f_{j, i}(N)= \begin{cases}\alpha_{j, i}+\beta_{j, i} N+\gamma_{j, i} N^2+\varepsilon_{j, i}, & N<\tau_{j, i} \\ \eta_{j,i}+\varepsilon_{j, i}, & N \geq \tau_{j, i}\end{cases}
+$$ 
+
++ $j \in{1,\ 2,\ 3,...,1440}$: the subplot,
++ $i \in{1,\ ...,6}$: the cell within a subplot,
++ $y_{j,i}$: Corn yield,
++ $N$: Nitrogen rate,
++ $\alpha, \beta, \gamma$: parameters (soil/field characteristics) that vary within a field in a spatially correlated manner and govern how yield responds to $N$
++ $\tau_{j, i}$:  the $N$ rate at which the yield reaches a plateau.
++ $\eta_{j,i}$: the yield at $N = \tau_{j, i}$,
++ $\varepsilon_{j, i}$: spatial autocorrelation.
+
+---
+
+The true economically optimal N rate for each cell is then determined by:
+
+$$
+N_{j, i}^* \equiv \operatorname{argmax}_N\left[p \cdot f_{j, i}(N)-w \cdot N\right]
+$$ 
+
+
+
++ $p$: the crop price, 
++ $w$ the nitrogen fertilizer price, 
++ $f_{j, i}(N)$: previously defined true yield response function for the specific cell.
+
+---
+
+
+## On-farm trial (nitrogen rate)
+
++ six N trial rates ($\{80, 130, 154, 184, 219, 270\}$ kg/ha.) followed a 6 × 6 Latin square design.
+
+(Note: 8 blocks, each block including 36 plots ($8*36=288$ plots) to establish the Latin square design). 
+
+
+---
+
+```{r}
+#| echo: false
+#| fig-align: "center"
+#| out-width: "100%"
+knitr::include_graphics("g_N.png")
+```
+
+---
+
+## Yield data
+
+Based on the response parameters $\left(\alpha_{j, i}, \beta_{j, i}, \gamma_{j, i}, \tau_{j, i}, \eta_{j,i}\right)$ and error term $\varepsilon_{j,i}$, the yield $y_{j, i}$ for each cell $(j, i)$ was generated following the true response function.
+
+* Note:
+The harvesting equipment was assumed to be able to accurately collect yield data only at the subplot resolution. Therefore, the observed yield data were at the resolution of subplot level.
+
+---
+
+```{r}
+#| echo: false
+#| fig-align: "center"
+#| out-width: "100%"
+knitr::include_graphics("/Users/monamousavi/Dropbox/Causal_climate/g_y.png")
+```
+
+
+
+## independent variables
+
++ The true response parameters $\left(\alpha_{j, i}, \beta_{j, i}, \gamma_{j, i}, \tau_{j, i}, \eta_{j,i}\right)$ and economically optimal N rates $N_{j, i}^*$ are not directly observable by producers or researchers.
+
++ This study creates some covariates (correlated with those true parameters) to serve as the observable field characteristics:
+
+
+$$X_j = \left(\beta^{1,1}_j, \beta^{1,2}_j, \beta^{2,1}_j, \beta^{2,2}_j, \tau^{1,1}_j, \tau^{1,2}_j, \tau^{2,1}_j, \tau^{2,2}_j, \eta^{1,1}_j, \eta^{1,2}_j, \eta^{2,1}_j, \eta^{2,2}_j \right)$$
+
+$$\beta = \beta^1 + \beta^2, \;\;
+\beta^1 = \beta^{1,1} + \beta^{1,2}, \;\;\beta^2 = \beta^{2,1} + \beta^{2,2}$$ 
+$$\tau = \tau^1 + \tau^2, \;\;
+\tau^1 = \tau^{1,1} + \tau^{1,2}, \;\;\tau^2 = \tau^{2,1} + \tau^{2,2}$$ 
+$$
+\eta = \min(\eta^1, \eta^2), \;\;
+\eta^1 = \min(\eta^{1,1}, \eta^{1,2}), \;\;
+\eta^2 = \min(\eta^{2,1}, \eta^{2,2})
+$$
+
+# Identifying the true best model among the five candidate models 
+
++ Each of the candidate models are trained using the whole experiment data and then variable rate EONR are estimated for the whole field. 
+
++ The estimated variable rate N recommendations are evaluated against the true variable rate N to evaluate the performance of the models (using profit loss relative to the true site-specific EONR as the criteria):
+
+---
+
+The profit loss of model $m$:
+
+$$
+\Delta\pi_m = \pi_{true} - \pi_m
+$$ 
+
+Where:
+
+
+$$
+\pi_{true} = \frac{1}{N} \cdot \sum_{i=1}^{N} \left[P_c \cdot f(N^*_i, X_i) - P_N \cdot N^*_i\right]
+$$ 
+
+$$
+\pi_{m^*} = \frac{1}{N} \cdot \sum_{i=1}^{N} \left[P_c \cdot f(\widehat{N}^*_{m}(X_i), X_i) - P_N \cdot \widehat{N}^*_{m}(X_i)\right]
+$$ 
+
+
+## Model Selection
+
++ For both approaches (yield prediction accuracy, local EONR prediction accuracy) spatial cross-validation is employed.
+  + The entire dataset is randomly split into a train and test dataset in a spatially clustered manner, which is repeated to create multiple folds.
+  
+## An example of the train-test split for each of the five folds
+  
+```{r}
+knitr::include_graphics("g_split_example.png")
+```  
+
+## Model selection based on yield level prediction
+
+For each fold:
+
+1. train the model using the train data of the fold
+2. predict yield for the test data based on the trained model ($\hat{y}_{i,f}$)
+3. calculate RMSE of yield prediction as 
+$$
+RMSE\text{-}Yield_{m,f} = \sqrt{\frac{\sum_{i=1}^{N_t}(\hat{y}_{i,f} - y_{i,f})^2}{N_t}}
+$$
+
+## Model selection based on local EONR
+
++ True EONRs are never observable in the real world 
+
++ Using estimated “local uniform EONR” as the proxy for the true local EONR  to overcome this challenge 
+
++ Steps for each fold and candidate models:
+  1. train the GAM model using the **test** data 
+  2. estimate uniform EONR for the **test** data ($\hat{N}^*_{f,gam}$)
+  3. train the candidate model using the **train** data 
+  4. estimate site-specific EONR for the **test** data based on the trained candidate model ($\hat{N}^*_{i, f,m}$). 
+  5. Calcurate the average of the site-specific EONR ($\hat{N}^*_{f,m}$)
+  6. Calcurate the RMSE of the estimated local EONR:
+  
+$$
+RMSE\text{-}LE_{m} = \sqrt{\frac{\sum_{f=1}^{F} (\hat{N}^*_{f,m} - \hat{N}^*_{f,gam})^2}{F}}
+$$ 
+
+
+## Evaluation of model selection performance
+
++ Selected models (based on both approaches) are evaluated based on the following difference:
+
+$$
+\pi_{m^*} - \pi_{m^s}
+$$ 
+
+
++ $\pi_{m^*}$: the highest profit that could be achieved if (EONR from) the true best model were used. 
++ $\pi_{m^s}$: the profit achieved by the selected model
+
+# Results and Conclusions
+
+## Simulation Results: Performance of the model selection approaches
+
+```{r}
+#| fig-align: "center"
+#| out-width: "90%"
+knitr::include_graphics("g_ranking.png")
+```
+
+## Simulation Results: Accuracy of the model selection approaches
+
+```{r}
+#| echo: false
+#| results: 'asis'
+tbl <- readRDS("main_selection_accuracy_table.rds")
+invisible(flextable::save_as_image(tbl, path = "table_accuracy.png"))
+knitr::include_graphics("table_accuracy.png")
+
+```
+
+## Simulation Results: profit loss associated with the seleted models relative to the actual best models
+
+```{r}
+#| fig-align: "center"
+#| out-width: "90%"
+knitr::include_graphics("g_pi_loss.png")
+```
+
+## Simulation Results: Accuracy of Local EONR estimation with GAM
+
+```{r}
+#| fig-align: "center"
+#| out-width: "90%"
+knitr::include_graphics("g_gam_leonr.png")
+```
+
+## Conclusion 
+
+This study demonstrates the economic advantage of local EONR method in making more accurate and cost-effective input management decisions compared to the yield-based model selection.
+
+
+
+
+
+## Chapter two: 
+
+### Causal methods for Site-specific yield response function estimation
+
+
+
+
+# Background and Research Objectives
+
+## Background
+
++ Efficient nitrogen management remains one of the most critical challenges in modern agricultural production.
+
++ Applying right amount of nitrogen at right place (and right time) recognizing the need for nitrogen based on observed characteristics (soil N, soil and field characteristics, weather).
+
++ An increasing amount of data from on-farm field trials has been accumulated over the years.
+
++ Estimating yield response functions using data pooled from multiple fields can provide significant agronomic and economic insights.
+
+## Motivation
+
++ When on-farm trial data is pooled, the treatment variable becomes "continuous" rather than discrete.
+
++ Existing approaches—such as direct applications of random forests or neural networks—often tend to fail to capture heterogeneous treatment effects of a continuous variable.
+
++ Most causal machine learning methods (e.g., R-learner) are designed for binary treatments, whereas our objective is to recover the full yield response \textcolor{blue}{curve}.
+
+## Research Objective
+
++ Find a causal machine learning approach capable of effectively identifying heterogeneous treatment effects tailored for yield response function estimation using data from on-farm trials, where the treatment variable is continuous and randomized.
+
++ Evaluate the performance of the proposed method through Monte Carlo simulations, comparing it against commonly used existing approaches.
+
+
+## Method 
+
+### Double-ML (binary treatment ($T$) case):
+
+DML works fine in a \textcolor{blue}{binary} treatment ($T$) case (model assumes linearity in $T$):
+
+```{=tex}
+\begin{align*}
+\mbox{Model 1: } Y = \theta(X)\cdot T + g(X, W) + v
+\end{align*}
+```
+
++ $Y$: Dependent variable 
++ $T$: Binary treatment variable (variable of interest) 
++ $X$: Set of variables that affect the impact of $T$ and also $Y$ directly
++ $\theta(X)$: Treatment effect as a function of $X$
++ $W$: Set of variables that affect $Y$ directly
++ $v$: Error term
+
+---
+
+
+$$
+\begin{aligned} & Y_{res}=Y-E[Y \mid X, W]=Y-f(X, W) \\ & T_{res}=T-E[T \mid X, W]=T-h(X, W)\end{aligned}
+$$
+
++ A simple regression of $Y_{res}$ on $T_{res}$ can recover $\theta(X)$:
+
+$$
+\begin{aligned}
+& Y_{res}= \\
+& \begin{aligned}
+\theta(X) \cdot T + g(X, W) + v 
+- & \underbrace{E\{[\theta(x) \cdot T + g(X, W) + v] \mid X, W\}}= \\
+& \textcolor{blue}{=} \textcolor{blue}{\theta(X) \cdot E(T \mid X, W) + g(X, W)} \\
+& \textcolor{blue}{=}  \textcolor{blue}{\theta(X) \cdot h(X, W) + g(X, W)}
+\end{aligned} \\
+& \theta(X) \cdot T + g(X, W) + v 
+- \theta(X) \cdot h(X, W) - g(X, W)= \\
+& \theta(X) \cdot [\underbrace{T - h(X, W)}_{T_{res}}] + v \\
+& \Rightarrow Y_{res} = \theta(X) \cdot T_{res} + v
+\end{aligned}
+$$
+
+---
+
+
+### Double-ML (continuous treatment ($T$) case):
+
+
+DML fails in a \textcolor{blue}{continuous} treatment ($T$) case:
+
+```{=tex}
+\begin{align*}
+\mbox{Model 2: } Y = \theta(X, T) + g(X, W) + v
+\end{align*}
+```
+
++ $T$: <span style = "color: blue;">Continuous </span> treatment variable (e.g., nitrogen rate) 
++ $\theta(X, T)$: Impact of $X$ and $T$ with their full interactions allowed
+
+
+---
+
+$\begin{aligned}
+& Y_{res}= \\
+& \theta(X, T)+g(X, W)+v-E\{\theta(X, T)+g(X, W)+v \mid X, W\}= \\
+& \theta(X, T)+g(X, W)+v-E(\theta(X, T) \mid X, W)-g(X, W) \\
+& \Rightarrow Y_{res}=\theta(X, T)-E(\theta(X, T) \mid X, W)+v
+\end{aligned}$
+
+So, orthogonalizing $T$ does not work: $\widehat{\theta}(X, T - g(X, W))$ cannot be used to approximate $E[\theta(X, T)]$.
+
+
+## Our proposed approaches
+
++ Single-orthogonalization
++ Extended CF
+
+## Single-orthogonalization
+
+```{=tex}
+\begin{align*}
+\mbox{Model 2: } Y = \theta(X, T) + g(X, W) + v
+\end{align*}
+```
+
+1. Regress $Y$ on $X$ and $W$ and predict $E[Y|X,W]$ (denoted as $f(X,W)$)
+2. Regress $Y-f(X,W)$ on $T$
+
+This approach works because The orthogonalization shifts the attention from the variations in $Y$ to the variations in $Y-f(X,W)$ just due to $X$ and $T$. 
+
+## Extended CF
+
++ We propose the use of smoothing splines. In spline regression, a single variable can be decomposed into multiple basis functions in a linear-in-parameter manner.
+
+```{=latex}
+\begin{align} \label{eq-spline-cf}
+y = \sum_{k=1}^K \theta_k(X)\cdot S_k(T)+ g(X, W) + v
+\end{align}
+```
+
++ $S_k(T)$: the value of the basis function $S_k(\cdot)$ evaluated at $T$.
+
+## Models 
+
+$$
+y = f(X, N) + g(X,W) + v
+$$
+
++ $Y$: Crop yield
++ $N$: Nitrogen rate (lb/acre) 
++ $X$: Collection of variables ($\alpha$, $\beta$, $\gamma$, and $\tau$)
++ $v$: Error term
+
+## Scenarios
+
++ Estimation approaches:
+
+```{r}
+#| echo: false
+#| fig-width: 4
+#| out-width: 4in
+knitr::include_graphics("f_est.png")
+```
+
++ For each of 500 simulation rounds, one field is selected as the test field. The remaining fields are combined to construct the training set in five scenarios: 
+  + number of fields from which data is combined: 1, 3, 5, 10 and 20
+
+## Site-specific EONR estimation
+
+For a given price of corn and nitrogen EONR is found by solving the following profit maximization problem:
+
+$$
+\widehat{\mathrm{EONR}}=\arg \max _N\left[P_{\text {Corn }} \times \hat{f}(X, N)-P_N \times N\right]
+$$
+
++ $\widehat{f}$: yield response curve estimated by the model under evaluation
+
+## Model evaluation
+
+Model evaluation is based on the accuracy of predicting <span style = "color: blue;"> site-specific economically optimal nitrogen rates </span>($\widehat{EONR}$).
+
+$$
+RMSE_{EONR}=\sqrt{\frac{1}{n} \sum_{i=1}^n\left(\widehat{EONR}_i-EONR_i\right)^2}
+$$
+
+# Results and Conclusions
+
+## Simulation (preliminary) results
+
+```{r}
+#| echo: false
+#| fig-width: 4
+#| out-width: 4in
+knitr::include_graphics("fig_rmse_hist.png")
+```
+
+
+## Simulation (preliminary) results
+
+```{r}
+#| fig-align: "center"
+#| out-width: "45%"
+knitr::include_graphics("tbl_best_model_by_field_count.png")
+```
+
+
+## Simulation (preliminary) results
+
+```{r}
+#| echo: false
+#| fig-width: 4
+#| out-width: 4in
+knitr::include_graphics("model_improvement.png")
+```
+
+## Conclusion
+
+
+By combining orthogonalization with flexible final-stage learners, we demonstrate how to preserve the strengths of causal inference while accommodating continuous treatments and agronomic heterogeneity.
