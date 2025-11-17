@@ -54,7 +54,7 @@ def train_cf_savedT_model_from_splits(data_2nd_stage, evall_N_seq, split_csv_pat
         Y = train_df["yield"].to_numpy()
         X = train_df[["Nk", "plateau", "b0"]].to_numpy()
         W = X.copy()
-        T = train_df[["T_1_tilde", "T_2_tilde", "T_3_tilde"]].to_numpy()
+        T = train_df[["T_1", "T_2", "T_3"]].to_numpy()
 
         # --- Causal Forest (orthogonalized, tuned) ---
         model_y = GradientBoostingRegressor(n_estimators=100, max_depth=3, min_samples_leaf=20)

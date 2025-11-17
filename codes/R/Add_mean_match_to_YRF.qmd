@@ -68,4 +68,55 @@ walk(targets, function(dir_path) {
 
 ```
 
+# CF
 
+```{r}
+# ==========================================================
+# Mean-match predicted yield ONLY for CF (change # fields)
+# ==========================================================
+suppressPackageStartupMessages({
+  library(here)
+  library(readr)
+  library(dplyr)
+  library(stringr)
+  library(purrr)
+})
+
+# Base directory
+base_dir <- here::here("results", "yield_response_function_for_one_iteration")
+target_dir <- file.path(base_dir, "YRF_CF_ten_fields")
+
+if (!dir.exists(target_dir)) {
+  stop("Target directory not found: ", target_dir, call. = FALSE)
+}
+
+# --- mean-match function (global shift per file) ---
+mean_match_file <- function(csv_path) {
+  df <- suppressMessages(readr::read_csv(csv_path, show_col_types = FALSE))
+
+  if (!all(c("pred_yield", "true_yield") %in% names(df))) {
+    message("Skipping (missing pred_yield/true_yield): ", csv_path)
+    return(invisible(FALSE))
+  }
+
+  delta <- mean(df$true_yield, na.rm = TRUE) - mean(df$pred_yield, na.rm = TRUE)
+
+  df <- df %>%
+    mutate(pred_yield_mm = pred_yield + delta) %>%
+    relocate(pred_yield_mm, .after = pred_yield)
+
+  readr::write_csv(df, csv_path)
+  message(sprintf("Updated: %s  (delta = %.6f)", csv_path, delta))
+  invisible(TRUE)
+}
+
+# --- find CF yield_response_*.csv files and apply mean-match ---
+csvs <- list.files(target_dir, pattern = "^yield_response_.*\\.csv$", full.names = TRUE)
+if (!length(csvs)) {
+  message("No yield_response_*.csv in: ", target_dir)
+} else {
+  walk(csvs, mean_match_file)
+}
+
+
+```

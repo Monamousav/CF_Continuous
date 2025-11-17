@@ -1,0 +1,136 @@
+---
+title: "Meeting Sep 2nd"
+format:
+  html: default
+execute:
+  echo: false
+bibliography: references.bib
+---
+
+
+# paper citation 
+
+In OFPE with continuous nitrogen rates pooled across fields, much of the literature either predicts levels and optimizes (@barbosa2020risk; @barbosa2020modeling; @krause2020random; @gardner2021economic) or treats the rate as discrete treatment levels (@kakimoto2022causal).
+
+
+@krause2020random:
+
+- Objective:
+
+They checked to see if  RF regression can be used to optimize variable planting rates for corn and soybean and then used this information to design site-specific variable rate planting strategies.
+
+- Data:
+
+On-farm field trials conducted in 27 sites across New York from 2014–2018 (57 site-years: 32 corn, 25 soybean).
+Design: Each site planted with four planting rates (corn: 66,718–103,784 seeds/ha; soybean: 197,684–494,210 seeds/ha). 
+
+They get:
+yield maps 
+as-applied planting rate maps
+soil data 
+weather data 
+
+
+- Method:
+
+RF:
+They fit models for each site-year 
+Predictors: planting rate, soil/topography, weather.
+Then they predicted yield at each rate per grid cell, then assigned the rate that maximized yield
+
+
+- Conclusion:
+
+Random forests performed well at predicting yield  but did not performed good when applied to untested site-years.
+
+
+@barbosa2020risk:
+
+- Objective:
+
+They wanted to predict corn yields using deep learning and then use those predictions to decide how much nitrogen and seed to apply in each part of the field.
+They also add a risk-averse concept (income does not drop below a certain level).
+
+- Data:
+
+OFPE from 9 cornfields in Illinois, Ohio, Nebraska, and Kansas (2017 season).
+Design: each field split into ~200 experimental strips, each with randomized N and seeding rates.
+
+Variables:
+N rate and seeding rate.
+Field characteristics
+Output: yield data.
+
+- Method:
+
+They used a CNN (as an ensemble) to predict a distribution (mean + variance = yield with uncertainty).
+Then found N and seed maps that maximize expected profit while controlling risk.
+They tested prediction accuracy with yield RMSE and reported improvements in expected profit compared to constant farmer rates.
+
+- Conclusion:
+
+Their risk-aware CNN ensemble can slightly raise expected farm profit and reducing excess N and seed use, but it still relies on yield prediction.
+
+
+@barbosa2020modeling:
+
+- Objective:
+
+They test whether CNN can better capture spatial patterns in data to model crop yield response to nitrogen and seeding rates, compared to standard ML models.
+
+- Data:
+
+DIFM project, 2017.
+9 corn fields in Illinois, Ohio, Nebraska, Kansas.
+Design: OFPE with randomized nitrogen and seed rates.
+
+Variables:
+nitrogen rate, seed rate.
+elevation, shallow soil electroconductivity, bare soil reflectance (satellite image).
+Output: yield
+
+- Method:
+
+They trained CNN (4 variants) to predict yield
+They Compared CNNs against baseline models: linear regression, random forest, support vector machine, fully connected NN and then used RMSE of yield prediction.
+
+- Conclusion:
+
+CNNs predict crop yields more accurately than other models by using spatial field patterns.
+
+* An example of the new ML-prediction approach with OFPE data: focusing on yield prediction accuracy instead of validating input response and EONR.
+
+@gardner2021economic
+
+- Objective:
+
+To develop a method to test if commercial site-specific prescription (Rx) maps for seed and nitrogen rates are actually economically optimal for farmers.
+
+- Data:
+
+cornfield, Ohio, 2018
+OFPE design: 276 experimental plots, randomized across 16 treatment combos (4 N rates × 4 seed rates).
+as-applied N and seed rates, yield data.
+
+- Method:
+
+They estimate yield response functions in zones using SCAM, then Compute profit functions for each zone and find EONR and EOSR for each zone by maximizing the profit function. And then compare the consultant’s Rx recommendations against the estimated optimal rates in terms of yield, input use, and profit.
+
+- Conclusion:
+
+The consultant’s Rx map was not economically optimal; it over-applied N in some zones and under-applied seed in others, causing profit losses, but the OFPE-based method showed more profitable input rates.
+
+* It’s prediction-based because the method fits yield functions to the observed treatment points and then derives EONR from that fitted function, instead of generating and validating yield responses at unobserved N/seed values for each site.
+
+
+
+# True yield response function 
+
+
+# === Quadratic-Plateau response
+
+yield_opt= gen_yield_QP(b0, b1, b2, NK, opt_N)
+
+gen_yield_QP <- function(b0, b1, b2, Nk, N) {
+    yield <- (N < Nk) * (b0 + b1 * N + b2 * N^2) + (N >= Nk) * (b0 + b1 * Nk + b2 * Nk^2)
+    return(yield)}

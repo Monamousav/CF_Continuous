@@ -5,6 +5,8 @@ from half_RRF import run_model as run_halfrrf
 from NO_RF import run_model as run_NO_RF
 from CF_python import run_model as run_CF_python
 from CF_savedT import run_model as run_CF_savedT
+from CF_spline import run_model as run_CF_spline
+from CF_test import run_model as run_test
 from Generate_train_test_splits import data_2nd_stage, evall_N_seq, device
 
 if __name__ == "__main__":
@@ -58,10 +60,23 @@ if __name__ == "__main__":
 
  
 # === CF using saved spline columns (T_1, T_2, T_3, …) ===
-    run_CF_savedT("CF_savedT", 1, data_2nd_stage, evall_N_seq)
+    #run_CF_savedT("CF_savedT", 1, data_2nd_stage, evall_N_seq)
     #run_CF_savedT("CF_savedT", 3, data_2nd_stage, evall_N_seq)
     #run_CF_savedT("CF_savedT", 5, data_2nd_stage, evall_N_seq)
    #run_CF_savedT("CF_savedT", 10, data_2nd_stage, evall_N_seq)
     #run_CF_savedT("CF_savedT", 20, data_2nd_stage, evall_N_seq)
 
-  
+
+# === CF spline ===
+   #run_CF_spline("CF_spline", 1, data_2nd_stage, evall_N_seq, device)
+   #run_CF_spline("CF_spline", 3, data_2nd_stage, evall_N_seq, device)
+   #run_CF_spline("CF_spline", 5, data_2nd_stage, evall_N_seq, device)
+   #run_CF_spline("CF_spline", 10, data_2nd_stage, evall_N_seq, device)
+   #run_CF_spline("CF_spline", 20, data_2nd_stage, evall_N_seq, device)
+
+  # === TEST (pygam-based spline computation, mgcv equivalent) ===
+   #run_test("test", 1, data_2nd_stage, evall_N_seq, device)
+   # run_test("test", 3, data_2nd_stage, evall_N_seq, device)
+   # run_test("test", 5, data_2nd_stage, evall_N_seq, device)
+  # run_test("test", 10, data_2nd_stage, evall_N_seq, device)
+  run_test("test", 20, data_2nd_stage, evall_N_seq, device)
