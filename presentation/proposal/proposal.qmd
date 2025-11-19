@@ -1,14 +1,12 @@
 ---
-title: "Chapter 1: A new model selection approach based on local economically optimal input rate"
+title: "Proposal Defense"
 author:
-  - name: Taro Mieno$^*$
   - name: Mona Mousavi$^*$
-  - name: David Bullock$^\dagger$
 institute:
   - $^*$ University of Nebraska Lincoln
-  - $^\dagger$ University of Illinois Urbana Champaign 
 date: 06/12/2025
 format:
+  revealjs: default
   beamer:
     theme: Singapore
     navigation: horizontal
@@ -16,7 +14,7 @@ format:
     slide-level: 2
     fontsize: "10pt"
 header-includes: 
-- \logo{\ifnum\thepage>1\includegraphics[width=1cm]{nebraska-n.jpg}\fi}
+logo: nebraska-n.jpg
 ---
 
 ```{r, include = FALSE}
@@ -29,6 +27,7 @@ library(dplyr)
 library(flextable)
 ```
 
+# Chapter 1: A new model selection approach based on local economically optimal input rate
 
 # Background and Research Objectives
 
@@ -36,7 +35,7 @@ library(flextable)
 
 + Uniform input management strategies can lead to both economic losses and environmental inefficiencies.
 
-+ Variable-rate input management as a solution (accounts for spatial heterogeneity in crop input demand.
++ Variable-rate input management as a solution (accounts for spatial heterogeneity in crop input demand).
 
 + On-farm precision experiments (OFPE) as a promising way (GPS technologies and variable-rate applicators).
   + Run on-farm agronomic trials and collect data
@@ -90,7 +89,9 @@ linear model, linear spatial error (SE) model, random forest (RF), boosted regre
 #| echo: false
 #| fig-align: "center"
 #| out-width: "95%"
-knitr::include_graphics("~/Desktop/g_field_map.png")
+knitr::include_graphics(
+  here::here("presentation/proposal/g_field_map.png")
+)
 ```
 
 ## True yield responses
@@ -140,7 +141,9 @@ $$
 #| echo: false
 #| fig-align: "center"
 #| out-width: "100%"
-knitr::include_graphics("g_N.png")
+knitr::include_graphics(
+  here::here("presentation/proposal/g_N.png")
+)
 ```
 
 ---
@@ -158,7 +161,9 @@ The harvesting equipment was assumed to be able to accurately collect yield data
 #| echo: false
 #| fig-align: "center"
 #| out-width: "100%"
-knitr::include_graphics("/Users/monamousavi/Dropbox/Causal_climate/g_y.png")
+knitr::include_graphics(
+  here::here("presentation/proposal/g_y.png")
+)
 ```
 
 
@@ -241,8 +246,8 @@ $$
   2. estimate uniform EONR for the **test** data ($\hat{N}^*_{f,gam}$)
   3. train the candidate model using the **train** data 
   4. estimate site-specific EONR for the **test** data based on the trained candidate model ($\hat{N}^*_{i, f,m}$). 
-  5. Calcurate the average of the site-specific EONR ($\hat{N}^*_{f,m}$)
-  6. Calcurate the RMSE of the estimated local EONR:
+  5. Calculate the average of the site-specific EONR ($\hat{N}^*_{f,m}$)
+  6. Calculate the RMSE of the estimated local EONR:
   
 $$
 RMSE\text{-}LE_{m} = \sqrt{\frac{\sum_{f=1}^{F} (\hat{N}^*_{f,m} - \hat{N}^*_{f,gam})^2}{F}}
@@ -521,3 +526,35 @@ knitr::include_graphics("model_improvement.png")
 
 
 By combining orthogonalization with flexible final-stage learners, we demonstrate how to preserve the strengths of causal inference while accommodating continuous treatments and agronomic heterogeneity.
+
+
+# Chapter 3: Economic assessment of biochar as a means to enhance soil water holding capacity 
+
+## Background 
+
++ Improving soil health is considered to be an important means of enhancing crop production resilience to climate change
++ Soil water holding capacity (WHC) is an important property of soil. Higher soil WHC leads to
+  + withstanding droughts better
+  + less irrigation (conserving water resources)
++ Biochar is actively researched as a supplement to enhance soil WHC of production fields, but is expensive
+
+## Research question and objective
+
+:::{.callout-note title="Research Question"}
++ Is biochar economically viable?
++ If not, how much cost reduction in biochar needs to be achieved to make it economically viable?
+:::
+
+## Method
+
+1. Simulate corn production using APSIM (a crop growth model) at different values of soil WHC for
+   1. historical weather conditions 
+   2. weather scenarios under climate change
+2. Calculate profit
+3. Identify the value of soil WHC enhancement
+
+## Expected Outcomes
+
+
+
+

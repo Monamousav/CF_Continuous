@@ -200,20 +200,12 @@ knitr::include_graphics(here::here("writing/Figures/g_N_hist_single_multiple.pdf
 ```
 
 
-The key objective of this article is to identify a causal machine learning approach capable of estimating heterogeneous treatment effects for yield response function estimation using data from on-farm trials, where the treatment variable—nitrogen rate—is continuous and randomized. We investigate two complementary approaches: a Single-Orthogonalized Neural Network (SO-ANN), designed to flexibly capture nonlinear treatment–response relationships, and an extended Causal Forest (CF) that incorporates smoothing splines to model continuous treatments. Both methods aim to preserve the strengths of causal ML—nonparametric modeling of complex interactions without restrictive assumptions. Their performance is evaluated through Monte Carlo simulations that mimic typical OFPE conditions and crop yield responses to nitrogen.
+The objective of this study is to develop and evaluate new causal machine-learning approaches capable of estimating heterogeneous treatment effects for yield response function estimation using data from on-farm trials, where the treatment variable—nitrogen rate—is continuous and randomized. We introduce two methods: a Single-Orthogonalized Neural Network (SO-NN), which isolates the treatment–response component by removing variation in yield explained solely by field conditions, and a semi-parametric Causal Forest (CF) that incorporates smoothing splines to accommodate continuous treatments. Both methods preserve key strengths of causal machine learning by flexibly modeling complex interactions without imposing restrictive functional assumptions. To assess their performance, we compare them with several existing approaches, such as direct applications of random forests or neural networks, using a Monte Carlo simulation framework.
 
-::: {.column-margin}
-<span style = "color: blue;"> We need to emphasize that we are proposing approaches that have not been tried anywhere: SO-NN and semi-parametric-CF. They are the main approaches. We then have other contrasting approaches to compare against. </span>
-:::
-<!--end of column-margin-->  
 
 
 We find that the SO-ANN approach outperforms the non-orthogonalized model, which represents the common practice in yield response function estimation. In contrast, the Double-Orthogonalized approach performs poorly, and its accuracy does not improve even with larger sample sizes, consistent with theoretical expectations. Our extended CF method successfully captures heterogeneous and nonlinear effects of a continuous treatment and accurately estimates site-specific profit-maximizing nitrogen rates with minimal bias underscoring the promise of this approach. Although the methodological extension proposed here is primarily motivated by the needs of OFPE, it holds potential for a wide range of applications in applied economics where continuous treatments and heterogeneous effects are of interest.
 
-::: {.column-margin}
-<span style = "color: blue;"> SO-ANN not introduced yet. You need to talk more about what you do in the above paragraph (mostly SO-NN and semi-parametric CF). </span>
-:::
-<!--end of column-margin-->
 
 # Method
 
@@ -345,10 +337,6 @@ where $P_{\text {Corn }}$ is the corn price, $P_{\text {N }}$ is the nitrogen pr
 
 #### DO‑CF (continuous)
 
-::: {.column-margin}
-<span style = "color: blue;"> Explain in  more detail about why it this is innovative. Explain the concept of linearization with splines using the figure I generated in my old manuscript. </span>
-:::
-<!--end of column-margin-->
 
 To adapt double-orthogonalization to the model of interest (Model 3), we estimate the heterogeneous response $f(X,N)$ by expanding the continuous treatment $N$ in a set of spline basis functions and allowing their coefficients to vary with the heterogeneity-inducing covariates $X$.
 
@@ -641,15 +629,16 @@ knitr::include_graphics(here::here("Writing/Figures/g_layout.pdf"))
 Cell-level yields are generated following the quadratic-plateau functional form as follows:
 
 $$
-\begin{align} 
-y_{i,j} = 
+\begin{aligned}
+y_{i,j} =
   \begin{cases}
-  \alpha_{i,j} + \beta_{i,j} N + \gamma_{i,j} N^2 + \varepsilon_{i,j}, & N < \tau_{i,j} \\
-  \eta_{i,j} + \varepsilon_{i,j}, & N \geq \tau_{i,j}
+    \alpha_{i,j} + \beta_{i,j} N + \gamma_{i,j} N^2 + \varepsilon_{i,j}, & N < \tau_{i,j} \\
+    \eta_{i,j} + \varepsilon_{i,j}, & N \ge \tau_{i,j}
   \end{cases}
+\end{aligned}
 \label{eq:yield-gen-sim}
-\end{align}
 $$
+
 
 In this formulation, yield increases as $N_{i,j}$ increase until $N_{i,j}$ reaches $\tau_{i,j}$, at which yield hits the plateau, $\eta_{i,j}$. The yield level at $N_{i,j}= 0$ is $\alpha_{i,j}$. The rate at which yield increases with respect to $N_{i,j}$ is governed by $\beta_{i,j}$ and $\gamma_{i,j}$. For a given cell, the quadratic-plateu function has five parameters, but the degree of freedom is only three. That is, once any three of the five parameters are determined, then the rest of the parameters are automatically determined. Specifically, we first generated $\alpha_{i,j}$, $\eta_{i,j}$, and $\tau_{i,j}$ in a spatially correlated manner following the Gaussian bluh bluh process (cite), and then $\beta_{i,j}$ and $\gamma_{i,j}$ were derived. The erorr term ($\varepsilon_{i,t}$) is generated using the same spatial process. This is repeated independently 500 times to create 500 fields of the same size but different spatial distribution and values of the three parameters.
 
