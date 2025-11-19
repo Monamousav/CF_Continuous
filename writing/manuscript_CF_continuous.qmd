@@ -418,9 +418,32 @@ RMSE_{EONR}=\sqrt{\frac{1}{n} \sum_{i=1}^n\left(\widehat{EONR}_i-EONR_i\right)^2
 \end{align*}
 $$
 
-To assess the predictive accuracy and economic relevance of these modeling approaches, we design a set of simulation experiments that reflect realistic agronomic conditions. These simulations serve as a controlled environment for evaluating model performance in estimating yield response functions and recommending optimal nitrogen rates.
 
-<span style = "color: red;"> Add profit differential as the measure. Discuss them in the results as well. </span>
+To assess the economic relevance of these modeling approaches, we use profit loss relative to the true site-specific EONR. The average per-acre profit from true site-specific EONR (denoted as $\pi_{true}$) is
+
+$$
+\begin{align}
+\pi_{true}  = \frac{1}{N}\cdot \sum_{i=1}^{N} [P_c \cdot f(N^*_i, X_i) - P_N \cdot N^*_i]
+\end{align}
+$$
+Where $P_c$ and $P_N$ represent the prices of corn yield and nitrogen, respectively.
+
+The average profit per acre associate with the site-specific N prescription by each model $m$ (denoted as $\pi$) is defined as
+
+$$
+\begin{align}
+\pi_m  = \frac{1}{N}\cdot \sum_{i=1}^{N} [P_c \cdot f(\widehat{N}^*_{m}(X_i), X_i) - P_N \cdot \widehat{N}^*_{m}(X_i)]
+\end{align}
+$$
+
+Then the profit loss of model $m$ relative to the true maximum profit achievable (denoted as $\pi-loss_{m}$) is then defined as
+
+$$
+\begin{align}
+\Delta\pi_m  = \pi_{true} - \pi_m
+\end{align}
+$$
+
 
 ## Simulation Scenarios
 
@@ -962,7 +985,7 @@ p_rel <- ggplot(rel, aes(x = field_f, y = pct_impr, fill = Model)) +
 p_rel
 
 ```
-@tbl-best_model_by_field_count highlights the top-performing model for each training size. CF is the dominant method when only a few fields are available, delivering the lowest mean RMSE for 1–5 fields. As field diversity increases, SO_ANN begins to outperform CF, becoming the preferred approach at 10 fields and showing a substantial further accuracy gain at 20 fields.
+
 
 ```{r}
 
@@ -1140,6 +1163,14 @@ title_SO <- grid::textGrob(
   )
 
 
+```
+
+@fig-profit-loss shows the best-performing model at each training-data size based on average profit loss relative to the true economically optimal nitrogen rate. When only 1–5 fields are available, the semi-parametric-CF achieves the lowest profit loss. As the number of training fields increases, the SO_NN becomes the top performer, attaining substantially lower profit loss at 10 and 20 fields. This pattern shows that CF works best when data are limited, while SO-NN performs better once more fields are available.
+
+```{r}
+#| label: fig-profit-loss
+#| fig-cap: "Profit loss"
+knitr::include_graphics("Figures/best_models.png")
 ```
 
 # Discussion
