@@ -1,19 +1,23 @@
 ---
 title: "Proposal Defense"
 author:
-  - name: Mona Mousavi$^*$
+  - name: Mona Mousavi
 institute:
-  - $^*$ University of Nebraska Lincoln
+  - University of Nebraska Lincoln
 date: 06/12/2025
 format:
-  revealjs: default
+  revealjs:
+    theme: [default, ./../custom.scss]
+    fontsize: 1.4em
+    callout-icon: false
+    scrollable: true
+    fig-dpi: 400
   beamer:
     theme: Singapore
     navigation: horizontal
     section-titles: false
     slide-level: 2
     fontsize: "10pt"
-header-includes: 
 logo: nebraska-n.jpg
 ---
 
@@ -29,8 +33,6 @@ library(flextable)
 
 # Chapter 1: A new model selection approach based on local economically optimal input rate
 
-# Background and Research Objectives
-
 ## Background
 
 + Uniform input management strategies can lead to both economic losses and environmental inefficiencies.
@@ -39,16 +41,15 @@ library(flextable)
 
 + On-farm precision experiments (OFPE) as a promising way (GPS technologies and variable-rate applicators).
   + Run on-farm agronomic trials and collect data
-  + \textcolor{blue}{Estimate how yield responds to nitrogen based on observed characteristics}
+  + <span style = "color: blue;">Estimate how yield responds to nitrogen based on observed characteristics</span>
   + Identify site-specific optimal nitrogen rates
-
 
 ## Motivation
 
 + Machine learning approaches being increasingly used for estimating site-specific yield response functions
   + identify the best model among several candidate ML approaches and also tuning hyper parameters via cross-validation as the key part of such process. 
   
-+ In all of the previous studies, the best model was selected based on their abilities to predict \textcolor{blue}{yield level} at the observation points (yield-based model selection).  
++ In all of the previous studies, the best model was selected based on their abilities to predict <span style = "color: blue;">yield level</span> at the observation points (yield-based model selection).  
 
 + However, the ultimate goal is not to predict yield levels, but to estimate yield response (causal marginal impact of nitrogen on crop yield). 
 
@@ -59,32 +60,35 @@ library(flextable)
 
 + Evaluate this approach, through Monte Carlo simulations, and compare its performance against the standard yield-based selection method. 
 
-# Method
+## Method: Overview
 
 Monte Carlo simulations with 500 iterations.
 
-Steps for a single iteration:
+### Steps for a single iteration:
 
   + Step 1: Generate OFPE experiment data
   + Step 2: Identify the true best (most profitable VRA application rate) model among the five candidate models
-  + Step 3: Select the best model among the 5 candidate models based on
-    + yield (conventional approach)
+  + Step 3: Select the best model among the 5 candidate models based on their abilities to predict
+    + yield level (conventional approach)
     + local-EONR (our approach)
   + Step 4: Evaluate the model selection approaches  
-  
-The five candidate models:
-linear model, linear spatial error (SE) model, random forest (RF), boosted regression forest (BRF), and causal forest (CF).  
 
-## Data generation 
+### The five candidate models: 
+
++ Linear model 
++ Linear spatial error (SE) model 
++ Random forest (RF) 
++ Boosted regression forest (BRF) 
++ Causal forest (CF) 
+
+## Method: Data generation 
 
 + The data generated from a simulated corn production field (about 37.3 hectares) with spatially varying field characteristics.
 
-+ One possible scenario of the spatial variability in the field characteristics is shown.
++ One possible scenario of the spatial variability in the field characteristics is shown below.
 
 + This study assumed the yield data were collected at the subplot level (total 1440 subplots).
 
-
-## The simulated OFPE field:
 ```{r}
 #| echo: false
 #| fig-align: "center"
@@ -94,7 +98,7 @@ knitr::include_graphics(
 )
 ```
 
-## True yield responses
+## Method: True yield responses
 
 The true yield is assumed to follow the quadratic plateau functional form as follows:
 
@@ -111,31 +115,12 @@ $$
 + $\eta_{j,i}$: the yield at $N = \tau_{j, i}$,
 + $\varepsilon_{j, i}$: spatial autocorrelation.
 
----
+## Method: On-farm trial (nitrogen rate)
 
-The true economically optimal N rate for each cell is then determined by:
-
-$$
-N_{j, i}^* \equiv \operatorname{argmax}_N\left[p \cdot f_{j, i}(N)-w \cdot N\right]
-$$ 
-
-
-
-+ $p$: the crop price, 
-+ $w$ the nitrogen fertilizer price, 
-+ $f_{j, i}(N)$: previously defined true yield response function for the specific cell.
-
----
-
-
-## On-farm trial (nitrogen rate)
-
-+ six N trial rates ($\{80, 130, 154, 184, 219, 270\}$ kg/ha.) followed a 6 × 6 Latin square design.
+Six N trial rates ($\{80, 130, 154, 184, 219, 270\}$ kg/ha.) following a 6 × 6 Latin square design.
 
 (Note: 8 blocks, each block including 36 plots ($8*36=288$ plots) to establish the Latin square design). 
 
-
----
 
 ```{r}
 #| echo: false
@@ -146,54 +131,44 @@ knitr::include_graphics(
 )
 ```
 
----
-
-## Yield data
+## Method: Yield data
 
 Based on the response parameters $\left(\alpha_{j, i}, \beta_{j, i}, \gamma_{j, i}, \tau_{j, i}, \eta_{j,i}\right)$ and error term $\varepsilon_{j,i}$, the yield $y_{j, i}$ for each cell $(j, i)$ was generated following the true response function.
 
 * Note:
 The harvesting equipment was assumed to be able to accurately collect yield data only at the subplot resolution. Therefore, the observed yield data were at the resolution of subplot level.
 
----
 
 ```{r}
 #| echo: false
 #| fig-align: "center"
 #| out-width: "100%"
 knitr::include_graphics(
-  here::here("presentation/proposal/g_y.png")
+here::here("presentation/proposal/g_y.png")
 )
 ```
 
+## Method: Independent variables
 
-
-## independent variables
-
-+ The true response parameters $\left(\alpha_{j, i}, \beta_{j, i}, \gamma_{j, i}, \tau_{j, i}, \eta_{j,i}\right)$ and economically optimal N rates $N_{j, i}^*$ are not directly observable by producers or researchers.
++ The true response parameters $\left(\alpha_{j, i}, \beta_{j, i}, \gamma_{j, i}, \tau_{j, i}, \eta_{j,i}\right)$ are not directly observable by producers or researchers.
 
 + This study creates some covariates (correlated with those true parameters) to serve as the observable field characteristics:
 
 
 $$X_j = \left(\beta^{1,1}_j, \beta^{1,2}_j, \beta^{2,1}_j, \beta^{2,2}_j, \tau^{1,1}_j, \tau^{1,2}_j, \tau^{2,1}_j, \tau^{2,2}_j, \eta^{1,1}_j, \eta^{1,2}_j, \eta^{2,1}_j, \eta^{2,2}_j \right)$$
 
-$$\beta = \beta^1 + \beta^2, \;\;
-\beta^1 = \beta^{1,1} + \beta^{1,2}, \;\;\beta^2 = \beta^{2,1} + \beta^{2,2}$$ 
-$$\tau = \tau^1 + \tau^2, \;\;
-\tau^1 = \tau^{1,1} + \tau^{1,2}, \;\;\tau^2 = \tau^{2,1} + \tau^{2,2}$$ 
+$$\beta = \beta^{1,1} + \beta^{1,2} + \beta^{2,1} + \beta^{2,2}$$ 
+$$\tau = \tau^{1,1} + \tau^{1,2} + \tau^{2,1} + \tau^{2,2}$$ 
 $$
-\eta = \min(\eta^1, \eta^2), \;\;
-\eta^1 = \min(\eta^{1,1}, \eta^{1,2}), \;\;
-\eta^2 = \min(\eta^{2,1}, \eta^{2,2})
+\eta = \min(\min(\eta^{1,1}, \eta^{1,2}), \min(\eta^{2,1}, \eta^{2,2}))
 $$
 
-# Identifying the true best model among the five candidate models 
+## Identifying the true best model among the five candidate models 
 
 + Each of the candidate models are trained using the whole experiment data and then variable rate EONR are estimated for the whole field. 
 
 + The estimated variable rate N recommendations are evaluated against the true variable rate N to evaluate the performance of the models (using profit loss relative to the true site-specific EONR as the criteria):
 
----
 
 The profit loss of model $m$:
 
@@ -216,9 +191,7 @@ $$
 ## Model Selection
 
 + For both approaches (yield prediction accuracy, local EONR prediction accuracy) spatial cross-validation is employed.
-  + The entire dataset is randomly split into a train and test dataset in a spatially clustered manner, which is repeated to create multiple folds.
-  
-## An example of the train-test split for each of the five folds
++ The entire dataset is randomly split into a train and test dataset in a spatially clustered manner, which is repeated to create multiple folds.
   
 ```{r}
 knitr::include_graphics("g_split_example.png")
@@ -266,7 +239,6 @@ $$
 + $\pi_{m^*}$: the highest profit that could be achieved if (EONR from) the true best model were used. 
 + $\pi_{m^s}$: the profit achieved by the selected model
 
-# Results and Conclusions
 
 ## Simulation Results: Performance of the model selection approaches
 
@@ -307,18 +279,7 @@ knitr::include_graphics("g_gam_leonr.png")
 
 This study demonstrates the economic advantage of local EONR method in making more accurate and cost-effective input management decisions compared to the yield-based model selection.
 
-
-
-
-
-## Chapter two: 
-
-### Causal methods for Site-specific yield response function estimation
-
-
-
-
-# Background and Research Objectives
+# Chapter 2: Causal methods for Site-specific yield response function estimation
 
 ## Background
 
@@ -336,7 +297,7 @@ This study demonstrates the economic advantage of local EONR method in making mo
 
 + Existing approaches—such as direct applications of random forests or neural networks—often tend to fail to capture heterogeneous treatment effects of a continuous variable.
 
-+ Most causal machine learning methods (e.g., R-learner) are designed for binary treatments, whereas our objective is to recover the full yield response \textcolor{blue}{curve}.
++ Most causal machine learning methods (e.g., R-learner) are designed for binary treatments, whereas our objective is to recover the full yield response <span style = "color: blue;">curve</span>.
 
 ## Research Objective
 
@@ -344,12 +305,9 @@ This study demonstrates the economic advantage of local EONR method in making mo
 
 + Evaluate the performance of the proposed method through Monte Carlo simulations, comparing it against commonly used existing approaches.
 
+## Method: Double-ML (binary treatment ($T$) case):
 
-## Method 
-
-### Double-ML (binary treatment ($T$) case):
-
-DML works fine in a \textcolor{blue}{binary} treatment ($T$) case (model assumes linearity in $T$):
+DML works fine in a <span style = "color: blue;">binary</span> treatment ($T$) case (model assumes linearity in $T$):
 
 ```{=tex}
 \begin{align*}
@@ -375,27 +333,24 @@ $$
 
 $$
 \begin{aligned}
-& Y_{res}= \\
+& Y_{res} = \\
 & \begin{aligned}
-\theta(X) \cdot T + g(X, W) + v 
-- & \underbrace{E\{[\theta(x) \cdot T + g(X, W) + v] \mid X, W\}}= \\
-& \textcolor{blue}{=} \textcolor{blue}{\theta(X) \cdot E(T \mid X, W) + g(X, W)} \\
-& \textcolor{blue}{=}  \textcolor{blue}{\theta(X) \cdot h(X, W) + g(X, W)}
-\end{aligned} \\
-& \theta(X) \cdot T + g(X, W) + v 
-- \theta(X) \cdot h(X, W) - g(X, W)= \\
-& \theta(X) \cdot [\underbrace{T - h(X, W)}_{T_{res}}] + v \\
-& \Rightarrow Y_{res} = \theta(X) \cdot T_{res} + v
+& {[\theta(X)\cdot T + g(X,W) + v] - [E\{ \theta(X)\cdot T + g(X,W) + v \mid X,W\}]= } \\
+& {[\theta(X)\cdot T + g(X,W) + v] - [\theta(X)\cdot E(T\mid X,W) + g(X,W)]=} \\
+&  {[\theta(X)\cdot T + g(X,W) + v] - [\theta(X)\cdot h(X,W) + g(X,W)]=} \\
+&  \theta(X)\cdot [T - h(X,W)] + v =  \\
+& \theta(X)\cdot T_{res} + v
+\end{aligned}
+\\[0.5em]
+& \Rightarrow\quad Y_{res} = \theta(X)\cdot T_{res} + v
 \end{aligned}
 $$
 
----
 
 
-### Double-ML (continuous treatment ($T$) case):
+## Method: Double-ML (continuous treatment ($T$) case):
 
-
-DML fails in a \textcolor{blue}{continuous} treatment ($T$) case:
+DML fails in a <span style = "color: blue;">continuous</span> treatment ($T$) case:
 
 ```{=tex}
 \begin{align*}
@@ -406,8 +361,6 @@ DML fails in a \textcolor{blue}{continuous} treatment ($T$) case:
 + $T$: <span style = "color: blue;">Continuous </span> treatment variable (e.g., nitrogen rate) 
 + $\theta(X, T)$: Impact of $X$ and $T$ with their full interactions allowed
 
-
----
 
 $\begin{aligned}
 & Y_{res}= \\
@@ -489,7 +442,7 @@ $$
 Model evaluation is based on the accuracy of predicting <span style = "color: blue;"> site-specific economically optimal nitrogen rates </span>($\widehat{EONR}$).
 
 $$
-RMSE_{EONR}=\sqrt{\frac{1}{n} \sum_{i=1}^n\left(\widehat{EONR}_i-EONR_i\right)^2}
+RMSE_{EONR} = \sqrt{\frac{\sum_{i=1}^{n} (\widehat{EONR}_{i} - {EONR}_{i})^2}{n}}
 $$
 
 # Results and Conclusions
