@@ -81,13 +81,12 @@ Monte Carlo simulations with 500 iterations.
 + Boosted regression forest (BRF) 
 + Causal forest (CF) 
 
-## Method: Data generation 
+## Method: (Step 1) Data generation 
 
 + The data generated from a simulated corn production field (about 37.3 hectares) with spatially varying field characteristics.
 
 + One possible scenario of the spatial variability in the field characteristics is shown below.
 
-+ This study assumed the yield data were collected at the subplot level (total 1440 subplots).
 
 ```{r}
 #| echo: false
@@ -163,11 +162,11 @@ $$
 \eta = \min(\min(\eta^{1,1}, \eta^{1,2}), \min(\eta^{2,1}, \eta^{2,2}))
 $$
 
-## Identifying the true best model among the five candidate models 
+## (Step 2) Identifying the true best model among the five candidate models 
 
-+ Each of the candidate models are trained using the whole experiment data and then variable rate EONR are estimated for the whole field. 
++ Train Each of the candidate models using the whole experiment data and then estimate variable rate EONR for the whole field. 
 
-+ The estimated variable rate N recommendations are evaluated against the true variable rate N to evaluate the performance of the models (using profit loss relative to the true site-specific EONR as the criteria):
++ Evaluate the performance of the models (using profit loss relative to the true site-specific EONR as the criteria):
 
 
 The profit loss of model $m$:
@@ -188,7 +187,7 @@ $$
 $$ 
 
 
-## Model Selection
+## (Step 3) Model Selection
 
 + For both approaches (yield prediction accuracy, local EONR prediction accuracy) spatial cross-validation is employed.
 + The entire dataset is randomly split into a train and test dataset in a spatially clustered manner, which is repeated to create multiple folds.
@@ -246,17 +245,6 @@ $$
 #| fig-align: "center"
 #| out-width: "90%"
 knitr::include_graphics("g_ranking.png")
-```
-
-## Simulation Results: Accuracy of the model selection approaches
-
-```{r}
-#| echo: false
-#| results: 'asis'
-tbl <- readRDS("main_selection_accuracy_table.rds")
-invisible(flextable::save_as_image(tbl, path = "table_accuracy.png"))
-knitr::include_graphics("table_accuracy.png")
-
 ```
 
 ## Simulation Results: profit loss associated with the seleted models relative to the actual best models
