@@ -65,7 +65,7 @@ library(measurements)
 
 # Introduction
 
-Efficient nitrogen (N) management remains one of the most critical challenges in modern agricultural production. Nitrogen is essential for achieving high crop yields, yet excessive or poorly timed applications can lead to economic losses and environmental harm (<span style = "color: blue;"> add citations here </span>). The principle of applying the right amount of nitrogen at the right place and time requires understanding the spatial and temporal variability in crop nitrogen needs. This variability arises from complex interactions among soil nitrogen availability, soil and field characteristics, and weather conditions. Accurately identifying the optimal nitrogen rate for each site and season is therefore fundamental to improving both profitability and sustainability in crop production systems.
+Efficient nitrogen (N) management remains one of the most critical challenges in modern agricultural production. Nitrogen is essential for achieving high crop yields, yet excessive or poorly timed applications can lead to economic losses and environmental harm (@fassa2022site). The principle of applying the right amount of nitrogen at the right place and time requires understanding the spatial and temporal variability in crop nitrogen needs. This variability arises from complex interactions among soil nitrogen availability, soil and field characteristics, and weather conditions. Accurately identifying the optimal nitrogen rate for each site and season is therefore fundamental to improving both profitability and sustainability in crop production systems.
 
 
 On-farm precision experiments (OFPE) have emerged as a powerful approach to generate the data necessary for site-specific nitrogen management (@bullock2019data; @lacoste2022farm). Through on-farm agronomic trials, researchers can directly observe yield responses to varying nitrogen rates under real-world field conditions, enabling estimation of yield response functions and the identification of economically optimal nitrogen rates. In recent years, prediction-oriented machine learning (ML) methods have been widely adopted in this context to model yield as a function of nitrogen and environmental covariates (@krause2020random; @barbosa2020modeling; @barbosa2020risk; @gardner2021economic). However, recent evidence suggests that prediction-oriented ML approaches, despite often achieving high yield-prediction accuracy, do not necessarily recover the underlying yield response to nitrogen. @tanaka2024can show that fertilizer rate recommendations derived from predictive ML models are highly sensitive to algorithm choice and covariate selection, leading to substantial variability in estimated optimal rates. These findings indicate a critical difference between predicting yield levels and estimating the causal yield response that determines economically optimal nitrogen rates, motivating the use of methods that explicitly estimate causal effects of nitrogen on yield.
@@ -690,8 +690,9 @@ Trial designs vary field by field based on the value of $\tau_{i,j}$. Specifical
 ```
 
 ```{r fig-trial-design, fig.cap = "Example trial design"}
-g_td <- readRDS(here::here("writing/Figures/g_td.rds"))
+readRDS(here::here("writing/Figures/g_td.rds"))
 ```
+
 
 # Simulation Results 
 
@@ -714,14 +715,9 @@ rmse_tbl_raw <- readRDS(here::here("results", "rmse_tbl_raw.rds"))
 
 ```
 
-Taken together, @fig-rmse-hist and @fig-avg-performance illustrate clear performance patterns across methods and training sizes. CF delivers low and tightly concentrated RMSE distributions even with limited data—consistently maintaining strong accuracy and stability for 1–5 fields (mean RMSE ≈ 14.7, 13.1, and 12.1, respectively), with only modest additional gains at 10 and 20 fields (11.9–11.8). SO_ANN initially lags behind CF (18.4 at one field), but its mean RMSE decreases steadily as more fields are added, surpassing CF performance at 10 and 20 fields (11.2 and 8.5, respectively). This pattern underscores the neural network’s superior ability to exploit richer spatial and agronomic heterogeneity when sufficient training data are available.
+Taken together, @fig-rmse-hist and @fig-avg-performance illustrate clear performance patterns across methods and training sizes. CF delivers low and tightly concentrated RMSE distributions even with limited data—consistently maintaining strong accuracy and stability for 1–5 fields (mean RMSE ≈ 14.7, 13.1, and 12.1, respectively), with only modest additional gains at 10 and 20 fields (11.9–11.8). SO_ANN initially lags behind CF (18.4 at one field), but its mean RMSE decreases steadily as more fields are added, surpassing CF performance at 10 and 20 fields (11.2 and 8.5, respectively). This pattern hilightes the neural network’s ability to exploit richer spatial and agronomic heterogeneity when sufficient training data are available.
 
-By contrast, NO_ANN exhibits substantial instability in the single-field case, with a heavy right tail and much higher errors, but rapidly converges toward the leading methods by 5–10 fields (mean RMSE improving to around 14–13), highlighting its strong dependence on sample size. SO_RF improves modestly with more fields (mid-20s RMSE for 10–20 fields) but remains consistently less accurate than SO_ANN or CF. NO_RF maintains broad, right-shifted distributions and higher mean errors throughout (≈ 36–40), confirming its role as a weak baseline. Finally, DO_ANN performs poorly throughout, with both histograms and means showing persistently high errors (≈ 90+) and negligible benefit from additional data, reflecting <span style = "color: red;"> over-correction </span>   in the orthogonalization process.
-
-::: {.column-margin}
-<span style = "color: blue;"> It is not over-correction. It is fundamentally messed up as the original functions are no longer retained. </span>
-:::
-<!--end of column-margin-->
+By contrast, NO_ANN exhibits substantial instability in the single-field case, with a heavy right tail and much higher errors, but rapidly converges toward the leading methods by 5–10 fields (mean RMSE improving to around 14–13), highlighting its strong dependence on sample size. SO_RF improves modestly with more fields (mid-20s RMSE for 10–20 fields) but remains consistently less accurate than SO_ANN or CF. NO_RF maintains broad, right-shifted distributions and higher mean errors throughout (≈ 36–40), confirming its role as a weak baseline. Finally, DO_ANN performs poorly throughout, with both histograms and means showing persistently high errors (≈ 90+) and negligible benefit from additional data, showing that the orthogonalization step breaks the original relationships in the data instead of preserving them.
 
 
 ```{r}
@@ -737,17 +733,20 @@ library(stringr)
 
 model_names <- function(models) {
   map <- c(
-    "Simple_ANN" = "No_ANN",
-    "RANN"       = "DO_ANN",
-    "HALFRANN"   = "SO_ANN",
-    "HALFRRF"    = "SO_RF",
-    "NO_RF"      = "NO_RF",
-    "CF"         = "CF"
+    "NO_ANN" = "NO_NN",
+    "DO_ANN" = "DO_NN",
+    "SO_ANN" = "SO_NN",
+    "NO_RF"  = "NO_RF",
+    "SO_RF"  = "SO_RF",
+    "CF"     = "CF"
   )
+
   models_upper <- toupper(models)
   out <- map[models_upper]
+  
   ifelse(is.na(out), models, out)
 }
+
 
 rmse_plot_df <- rmse_tbl_raw %>%
   filter(ok_rows) %>%
@@ -789,7 +788,7 @@ print(p)
 
 
 # ggsave(
-#   filename = here::here("Proposal_presentation/fig_rmse_hist.png"),
+#   filename = here::here("presentation/proposal/fig_rmse_hist.png"),
 #   plot = p,
 #   width = 12,
 #   height = 7,
@@ -806,23 +805,40 @@ print(p)
 #| fig-width: 12
 #| fig-height: 7
 
+model_names <- function(models) {
+  map <- c(
+    "CF"     = "CF",
+    "DO_ANN" = "DO_NN",
+    "NO_ANN" = "NO_NN",
+    "SO_ANN" = "SO_NN",
+    "NO_RF"  = "NO_RF",
+    "SO_RF"  = "SO_RF"
+  )
+  
+  models_upper <- toupper(models)
+  out <- map[models_upper]
+  ifelse(is.na(out), models, out)
+}
+
+
 rmse_df <- rmse_tbl_raw %>%
-  dplyr::group_by(Model, `#field`, sim) %>%  
+  dplyr::group_by(Model, `#field`, sim) %>%
   dplyr::summarise(RMSE = dplyr::first(RMSE), .groups = "drop") %>%
   dplyr::mutate(
-    # Field labels (auto from unique values)
+    Model_lab = model_names(Model),
     field_f = factor(
       `#field`,
       levels = sort(unique(`#field`)),
-      labels = paste0(sort(unique(`#field`)),
-                      ifelse(sort(unique(`#field`)) == 1, " field", " fields"))
+      labels = paste0(
+        sort(unique(`#field`)),
+        ifelse(sort(unique(`#field`)) == 1, " field", " fields")
+      )
     )
   )
 
-
 # 3) summary stats 
 rmse_summary <- rmse_df %>%
-  dplyr::group_by(Model, field_f) %>%
+  dplyr::group_by(Model_lab, field_f) %>%
   dplyr::summarise(
     n      = dplyr::n(),
     mean   = mean(RMSE, na.rm = TRUE),
@@ -833,23 +849,32 @@ rmse_summary <- rmse_df %>%
     upper  = mean + qt(0.975, df = n - 1) * se,
     .groups = "drop"
   )
+
 # 
-p_mean <- ggplot(rmse_summary, aes(x = field_f, y = mean, group = Model, color = Model)) +
+p_mean <- ggplot(rmse_summary, aes(x = field_f, y = mean,
+                                   group = Model_lab, color = Model_lab)) +
   geom_line(linewidth = 0.7, alpha = 0.8) +
   geom_point(size = 3) +
-  labs(x = "# fields", y = "Mean RMSE", color = "Model") +
+  labs(
+    x = "# fields",
+    y = "Mean RMSE",
+    color = "Model"
+  ) +
   theme_bw() +
   theme(
     axis.title = element_text(size = 13),
-    strip.text = element_text(face = "bold")
+    strip.text = element_text(face = "bold"),
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 12)
   )
+
 
 p_mean
 
 
 # ggsave(here::here("results","rmse_mean_by_model_fields.png"), p_mean, width = 9, height = 5, dpi = 300)
 
-# ggsave(here::here("Proposal_presentation","model_improvement.png"), p_mean, width = 9, height = 5, dpi = 300)
+# ggsave(here::here("presentation", "proposal", "model_improvement.png"), p_mean, width = 9, height = 5, dpi = 300)
 ```
 
 ```{r}
@@ -911,14 +936,8 @@ p_mean
 #   tab_source_note(source_note = gt::html(legend_html))
 ```
 
-@fig-improvement reports each method’s percentage improvement in mean RMSE relative to the NO_RF baseline. CF consistently provides the strongest gains among the robust approaches when data are scarce—reducing error by ≈63% with a single field, and climbing to ≈67–68% once 5–20 fields are available. SO_ANN exhibits a similar improvement trend but grows even more dominant as more diverse data accumulate, achieving ≈53% improvement at 1 field, ≈63% by 5 fields, and reaching ≈68% at 10 fields and ≈77% at 20 fields, the highest improvement across all models. NO_ANN transitions from a large negative result when trained on just one field (substantially worse than baseline) to strong relative improvements exceeding 65% by 10–20 fields, reinforcing its reliance on adequate sample support. SO_RF offers moderate improvement (≈38–43%) that changes little with added fields. DO_ANN remains entirely uncompetitive across all sample sizes—showing worsening performance relative to NO_RF by more than 100–150%, indicating severe model misspecification.
+@fig-improvement compares the performance of CF and SO_ANN relative to the worst-performing model, DO_ANN, across different numbers of fields. Both methods deliver large improvements in RMSE at all sample sizes. With only one field, CF and SO_ANN reduce error by roughly 80–84%. As more fields become available, both approaches strengthen further: CF’s improvement rises to about 87% by 5–10 fields, while SO_ANN continues to gain with increasing data, reaching nearly 91% at 20 fields.
 
-::: {.column-margin}
-<span style = "color: blue;"> All this is probably redundant. What are you adding beyond the previous paragraphs? </span>
-:::
-<!--end of column-margin-->
-
-Together, these results emphasize that while CF is the most reliable option under limited data availability, SO_ANN ultimately yields the largest relative error reduction when multi-field datasets are accessible, highlighting its superior scalability with richer training information.
 
 ```{r}
 #| label: fig-improvement
@@ -927,7 +946,7 @@ Together, these results emphasize that while CF is the most reliable option unde
 #| fig-height: 7
 
 # compare to which model?
-baseline <- "NO_RF"
+baseline <- "DO_ANN"
 
 # average RMSE by Model × field
 
@@ -956,13 +975,18 @@ avg_by <- rmse_df %>%
   dplyr::group_by(Model, field_f) %>%
   dplyr::summarise(mean_rmse = mean(RMSE), .groups = "drop")
 
+models_to_keep <- c("SO_ANN", "CF")
+
+avg_by_filtered <- avg_by %>%
+  dplyr::filter(Model %in% models_to_keep | Model == baseline)
+
 # baseline per field 
-baseline_by_field <- avg_by %>%
+baseline_by_field <- avg_by_filtered  %>%
   dplyr::filter(Model == baseline) %>%
   dplyr::select(field_f, baseline_rmse = mean_rmse)
 
 # join and compute % improvement
-rel <- avg_by %>%
+rel <- avg_by_filtered  %>%
   dplyr::left_join(baseline_by_field, by = "field_f") %>%
   dplyr::filter(!is.na(baseline_rmse)) %>%
   dplyr::mutate(
@@ -1123,8 +1147,13 @@ library(patchwork)
 
 ```
 
+@fig-profit-loss shows the best-performing model at each training-data size based on average profit loss relative to the true economically optimal nitrogen rate. When only 1–5 fields are available, the semi-parametric-CF achieves the lowest profit loss. As the number of training fields increases, the SO_NN becomes the top performer, attaining substantially lower profit loss at 10 and 20 fields. This pattern shows that CF works best when data are limited, while SO-NN performs better once more fields are available.
 
-<span style = "color: blue;"> I do not see the purpose of this much. Contrast CF, SO-NN, and the worst (all in the same panel) across the number of fields. </span>
+```{r}
+#| label: fig-profit-loss
+#| fig-cap: "Profit loss"
+knitr::include_graphics("Figures/best_models.png")
+```
 
 @fig-yield-res-combined displays predicted and true yield response functions for the best-performing models at each training size. For the CF, shown for 1, 3, and 5 fields, the estimated curves closely track the overall shape of the true response but exhibit a slight upward bias in predicted yield levels. The general curvature, including diminishing returns at higher nitrogen rates, is captured consistently even under data-constrained conditions. As more fields are incorporated, the CF predictions become smoother and more aligned with the true function, reflecting improved generalization.
 
@@ -1165,17 +1194,11 @@ title_SO <- grid::textGrob(
 
 ```
 
-@fig-profit-loss shows the best-performing model at each training-data size based on average profit loss relative to the true economically optimal nitrogen rate. When only 1–5 fields are available, the semi-parametric-CF achieves the lowest profit loss. As the number of training fields increases, the SO_NN becomes the top performer, attaining substantially lower profit loss at 10 and 20 fields. This pattern shows that CF works best when data are limited, while SO-NN performs better once more fields are available.
 
-```{r}
-#| label: fig-profit-loss
-#| fig-cap: "Profit loss"
-knitr::include_graphics("Figures/best_models.png")
-```
 
 # Discussion
 
-This study evaluates alternative causal-ML strategies for estimating heterogeneous yield response to a continuous nitrogen treatment in an OFPE setting. CF consistently attains low and tightly concentrated EONR errors with only 1–5 training fields, indicating strong small-sample stability (see @fig-rmse-hist and @fig-avg-performance). SO_ANN improves monotonically with additional fields and ultimately dominates once ≥10 fields are available, achieving the lowest mean RMSE overall (e.g., 11.2 at 10 fields and 8.5 at 20 fields). These complementary strengths that CF is preferred under data-constrained conditions, whereas SO_ANN becomes the method of choice as multi-field datasets accumulate (see @tbl-best_model_by_field_count).
+This study evaluates alternative causal-ML strategies for estimating heterogeneous yield response to a continuous nitrogen treatment in an OFPE setting. CF consistently attains low and tightly concentrated EONR errors with only 1–5 training fields, indicating strong small-sample stability (see @fig-rmse-hist and @fig-avg-performance). SO_ANN improves monotonically with additional fields and ultimately dominates once ≥10 fields are available, achieving the lowest mean RMSE overall (e.g., 11.2 at 10 fields and 8.5 at 20 fields). These complementary strengths that CF is preferred under data-constrained conditions, whereas SO_ANN becomes the method of choice as multi-field datasets accumulate.
 
 Methodologically, the contrast between single-orthogonalization and double-orthogonalization is central. For continuous treatments, the double-orthogonal residualization of the treatment does not generally preserve the relevant heterogeneous response structure. Our simulations reflect this: DO_ANN performs poorly and does not benefit from larger samples. In contrast, single-orthogonalization—residualizing only the outcome to remove baseline variation from covariates $W$—retains the full interaction between $X$ and $N$, allowing the final learner to recover the nonlinearity and heterogeneity of the response function. The extended CF strikes a different balance: by expressing $N$ through a spline basis and orthogonalizing the basis components, it restores a linear-in-parameters score that CF can learn reliably. 
 
