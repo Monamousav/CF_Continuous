@@ -514,3 +514,75 @@ all_plots <- readRDS(here::here("results/yield_response_function_for_one_iterati
 wrap_plots(all_plots, ncol = 2)
 
 ```
+
+
+
+# Box plot
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# -------------------------
+# 1) unified model renaming
+# -------------------------
+model_names <- function(models) {
+  map <- c(
+    "NO_ANN" = "NO_NN",
+    "DO_ANN" = "DO_NN",
+    "SO_ANN" = "SO_NN",
+    "NO_RF"  = "NO_RF",
+    "SO_RF"  = "SO_RF",
+    "CF"     = "CF"
+  )
+  models_upper <- toupper(models)
+  out <- map[models_upper]
+  ifelse(is.na(out), models, out)
+}
+
+# -------------------------
+# 2) RMSE dataset (one per Model, field, sim)
+# -------------------------
+rmse_df <- rmse_tbl_raw %>%
+  group_by(Model, `#field`, sim) %>%
+  summarise(RMSE = first(RMSE), .groups = "drop") %>%
+  mutate(
+    Model_lab = model_names(Model),
+    field_f = factor(
+      `#field`,
+      levels = sort(unique(`#field`)),
+      labels = paste0(
+        sort(unique(`#field`)),
+        ifelse(sort(unique(`#field`)) == 1, " field", " fields")
+      )
+    )
+  )
+
+
+
+
+p_box <- ggplot(rmse_df, aes(x = Model_lab, y = RMSE)) +
+  geom_boxplot(fill = "skyblue3", alpha = 0.8, outlier.size = 0.8) +
+  facet_wrap(~ field_f, nrow = 1) +
+  labs(
+    x = "Model",
+    y = "RMSE"
+  ) +
+  theme_bw() +
+  theme(
+    strip.text = element_text(face = "bold", size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+p_box
+
+# ggsave(
+#   here::here("presentation", "proposal", "p_box.png"),
+#   p_box,
+#   width = 14,
+#   height = 16,
+#   dpi = 300
+# )
+
+
+```
