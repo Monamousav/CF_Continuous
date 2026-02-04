@@ -1030,8 +1030,7 @@ best_models <- rmse_summary %>%
   slice_min(order_by = mean, with_ties = FALSE) %>%
   ungroup() %>%
   arrange(mean, field_n) %>%
-  select(Model = Model_lab, field_f, mean)
-
+  select(Model, field_f, mean)
 
 best_table <- best_models %>%
   gt() %>%
