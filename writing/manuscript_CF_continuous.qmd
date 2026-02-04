@@ -26,6 +26,7 @@ format:
     toc: true
     number-sections: true
     number-depth: 3
+    embed-resources: true
   pdf:
     toc: true
     number-sections: true
@@ -1030,7 +1031,7 @@ best_models <- rmse_summary %>%
   slice_min(order_by = mean, with_ties = FALSE) %>%
   ungroup() %>%
   arrange(mean, field_n) %>%
-  select(Model, field_f, mean)
+  select(Model= Model_lab, field_f, mean)
 
 best_table <- best_models %>%
   gt() %>%
@@ -1198,7 +1199,9 @@ title_SO <- grid::textGrob(
 
 # Discussion
 
-This study evaluates alternative causal-ML strategies for estimating heterogeneous yield response to a continuous nitrogen treatment in an OFPE setting. CF consistently attains low and tightly concentrated EONR errors with only 1–5 training fields, indicating strong small-sample stability (see @fig-rmse-hist and @fig-avg-performance). SO_ANN improves monotonically with additional fields and ultimately dominates once ≥10 fields are available, achieving the lowest mean RMSE overall (e.g., 11.2 at 10 fields and 8.5 at 20 fields). These complementary strengths that CF is preferred under data-constrained conditions, whereas SO_ANN becomes the method of choice as multi-field datasets accumulate.
+This study evaluates alternative causal-ML strategies for estimating heterogeneous yield response to a continuous nitrogen treatment in an OFPE setting. CF consistently attains low and tightly concentrated EONR errors with only 1–5 training fields, indicating strong small-sample stability (see @fig-rmse-hist and @fig-avg-performance). In contrast, SO_ANN improves monotonically with additional fields and ultimately dominates once ≥10 fields are available, achieving the lowest mean RMSE overall (e.g., 11.2 at 10 fields and 8.5 at 20 fields).
+
+This pattern is consistent with the structural differences between the two approaches. CF relies on orthogonalized residualization, which reduces sensitivity to first-stage estimation error and yields robustness in data-constrained settings. SO_ANN, by contrast, does not employ double orthogonalization and is therefore more reliant on accurate function approximation of the outcome–treatment relationship. As the number of training fields increases, the richer data environment mitigates this limitation, allowing SO_ANN to benefit from its greater representational flexibility and outperform CF in larger-sample settings. Taken together, these complementary strengths suggest that CF is preferred under data-constrained conditions, whereas SO_ANN becomes the method of choice as multi-field datasets accumulate.
 
 Methodologically, the contrast between single-orthogonalization and double-orthogonalization is central. For continuous treatments, the double-orthogonal residualization of the treatment does not generally preserve the relevant heterogeneous response structure. Our simulations reflect this: DO_ANN performs poorly and does not benefit from larger samples. In contrast, single-orthogonalization—residualizing only the outcome to remove baseline variation from covariates $W$—retains the full interaction between $X$ and $N$, allowing the final learner to recover the nonlinearity and heterogeneity of the response function. The extended CF strikes a different balance: by expressing $N$ through a spline basis and orthogonalizing the basis components, it restores a linear-in-parameters score that CF can learn reliably. 
 
