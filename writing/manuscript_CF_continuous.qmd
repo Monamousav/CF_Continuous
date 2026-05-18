@@ -61,19 +61,17 @@ library(patchwork)
 library(gridExtra)
 library(kableExtra)
 library(measurements)
+library(here)
 ```
 
 
 # Introduction
 
-Efficient nitrogen (N) management remains one of the most critical challenges in modern agricultural production. Nitrogen is essential for achieving high crop yields, yet excessive or poorly timed applications can lead to economic losses and environmental harm (@fassa2022site). The principle of applying the right amount of nitrogen at the right place and time requires understanding the spatial and temporal variability in crop nitrogen needs. This variability arises from complex interactions among soil nitrogen availability, soil and field characteristics, and weather conditions. Accurately identifying the optimal nitrogen rate for each site and season is therefore fundamental to improving both profitability and sustainability in crop production systems.
+Efficient nitrogen (N) management remains one of the most critical challenges in modern agricultural production. For many crops, nitrogen fertilization is essential for achieving high crop yields, yet excessive or poorly timed applications can lead to economic losses and environmental harm (@fassa2022site). The principle of applying the right amount of nitrogen at the right place and time requires understanding the spatial and temporal variability in crop nitrogen needs. This variability arises from complex interactions among soil nitrogen availability, soil and field characteristics, and weather conditions. Accurately identifying the optimal nitrogen rate for each site and season is therefore fundamental to improving both profitability and sustainability in crop production systems.
 
+On-farm precision experiments (OFPEs) have emerged as a powerful approach to generate the data necessary for site-specific nitrogen management (@bullock2019data; @lacoste2022farm). Through on-farm agronomic trials, researchers can directly observe yield responses to varying nitrogen rates under real-world field conditions, enabling estimation of yield response functions and the estimation of economically optimal nitrogen rates. In recent years, prediction-oriented machine learning (ML) methods have been widely adopted in this context to model yield as a function of nitrogen and environmental covariates (@krause2020random; @barbosa2020modeling; @barbosa2020risk; @gardner2021economic). However, recent evidence suggests that prediction-oriented ML approaches, despite often achieving high yield-prediction accuracy, do not necessarily recover the underlying yield response to nitrogen. @tanaka2024can show that fertilizer rate recommendations derived from predictive ML models are highly sensitive to algorithm choice and covariate selection, leading to substantial variability in estimated optimal application rates. These findings indicate a critical difference between predicting yield levels and estimating the causal yield response that determines economically optimal nitrogen rates, motivating the use of methods that explicitly estimate causal effects of nitrogen on yield.
 
-On-farm precision experiments (OFPE) have emerged as a powerful approach to generate the data necessary for site-specific nitrogen management (@bullock2019data; @lacoste2022farm). Through on-farm agronomic trials, researchers can directly observe yield responses to varying nitrogen rates under real-world field conditions, enabling estimation of yield response functions and the identification of economically optimal nitrogen rates. In recent years, prediction-oriented machine learning (ML) methods have been widely adopted in this context to model yield as a function of nitrogen and environmental covariates (@krause2020random; @barbosa2020modeling; @barbosa2020risk; @gardner2021economic). However, recent evidence suggests that prediction-oriented ML approaches, despite often achieving high yield-prediction accuracy, do not necessarily recover the underlying yield response to nitrogen. @tanaka2024can show that fertilizer rate recommendations derived from predictive ML models are highly sensitive to algorithm choice and covariate selection, leading to substantial variability in estimated optimal rates. These findings indicate a critical difference between predicting yield levels and estimating the causal yield response that determines economically optimal nitrogen rates, motivating the use of methods that explicitly estimate causal effects of nitrogen on yield.
-
-
-In the OFPE setting, causal machine learning methods have shown to be promising to recover the full yield response curve. @kakimoto2022causal showed that causal forest can estimate heterogeneous treatment effects of an input on yield more accurately than prediction-oriented machined approaches like random forest, boosted forest, and convolutional neural network. However, their application of traditional CF is only limited to a single-year OFPE experiment from a single field because it was developed primarily to estimate
-the heterogeneous treatment effects of a discrete treatment. In OFPE, there are typically five or six distinctive target experimental rates (see the first panel of @fig-distribution-N). In @kakimoto2022causal, CF estimates the effect of multiple treatments defined as the increase in nitrogen rate from the lowest rate to the other rates (so n − 1 treatments in n-rate trials). However, once data from multiple fields with different target rates are combined, applied nitrogen rates become rather continuous as seen in the second panel of @fig-distribution-N. While existing prediction-oriented ML approaches—such as direct applications of random forests or neural networks — can naturally handle continuous treatment variable, they tend to fail to capture heterogeneous treatment effects of a treat variable (@kakimoto2022causal). As multi-year, multi-field OFPE datasets accumulate, pooling data across fields has become both feasible and desirable—it can improve estimation of yield response functions and deliver stronger agronomic and economic insights. It creates a need for methods that can estimate heterogeneous treatment effects of a continuous treatment variable.
+In the OFPE setting, causal machine learning methods have shown to be promising in the recovery of full yield response curves. @kakimoto2022causal showed that causal forest can estimate heterogeneous treatment effects of an input on yield more accurately than prediction-oriented machined approaches like random forest, boosted forest, and convolutional neural network. However, their application of traditional CF is only limited to a single-year OFPE experiment from a single field because it was developed primarily to estimate the heterogeneous treatment effects of a discrete treatment. In OFPE, there are typically five or six distinctive target experimental rates (see the first panel of @fig-distribution-N). In @kakimoto2022causal, CF estimates the effect of multiple treatments defined as the increase in nitrogen rate from the lowest rate to the other rates (so N − 1 treatments in N rate trials). However, once data from multiple fields with different target rates are combined, applied nitrogen rates become rather continuous as seen in the bottom panel of @fig-distribution-N. While existing prediction-oriented ML approaches—such as direct applications of random forests or neural networks — can naturally handle continuous treatment variable, they tend to fail to capture heterogeneous effects of a treatment variable (@kakimoto2022causal). As multi-year, multi-field OFPE datasets accumulate, pooling data across fields has become both feasible and desirable—it can improve estimation of yield response functions and deliver stronger agronomic and economic insights. It creates a need for methods that can estimate heterogeneous treatment effects of a continuous treatment variable.
 
  
 
@@ -200,40 +198,31 @@ the heterogeneous treatment effects of a discrete treatment. In OFPE, there are 
 knitr::include_graphics(here::here("writing/Figures/g_N_hist_single_multiple.pdf"))
 ```
 
-
-The objective of this study is to develop and evaluate new causal machine-learning approaches capable of estimating heterogeneous treatment effects for yield response function estimation using data from on-farm trials, where the treatment variable—nitrogen rate—is continuous and randomized. We introduce two methods: a Single-Orthogonalized Neural Network (SO-NN), which isolates the treatment–response component by removing variation in yield explained solely by field conditions, and a semi-parametric Causal Forest (CF) that incorporates smoothing splines to accommodate continuous treatments. Both methods preserve key strengths of causal machine learning by flexibly modeling complex interactions without imposing restrictive functional assumptions. To assess their performance, we compare them with several existing approaches, such as direct applications of random forests or neural networks, using a Monte Carlo simulation framework.
-
+The objective of this study is to develop and evaluate new causal machine-learning approaches capable of estimating heterogeneous treatment effects for yield response function estimation using data from on-farm trials, where the treatment variable—nitrogen rate—is continuous and randomized. We introduce two methods: a Single-Orthogonalized Neural Network (SO-NN), which isolates the treatment–response component by removing variation in yield explained solely by field conditions, and a semi-parametric Causal Forest (CF) that incorporates smoothing splines to accommodate continuous treatments. Both methods preserve key strengths of causal machine learning by flexibly modeling complex interactions without imposing restrictive functional assumptions. We use a Monte Carlo simulation framework to assess their performances. comparing them with several existing approaches, such as direct applications of random forest and neural networks. 
 
 
-We find that the SO-ANN approach outperforms the non-orthogonalized model, which represents the common practice in yield response function estimation. In contrast, the Double-Orthogonalized approach performs poorly, and its accuracy does not improve even with larger sample sizes, consistent with theoretical expectations. Our extended CF method successfully captures heterogeneous and nonlinear effects of a continuous treatment and accurately estimates site-specific profit-maximizing nitrogen rates with minimal bias underscoring the promise of this approach. Although the methodological extension proposed here is primarily motivated by the needs of OFPE, it holds potential for a wide range of applications in applied economics where continuous treatments and heterogeneous effects are of interest.
+We find that the SO-NN approach outperforms the non-orthogonalized model, which represents the common practice in yield response function estimation. In contrast, the Double-Orthogonalized approach performs poorly, and its accuracy does not improve even with larger sample sizes, consistent with theoretical expectations. Underscoring the promise of this approach, our extended CF method successfully captures heterogeneous and nonlinear effects of a continuous treatment and accurately estimates site-specific profit-maximizing nitrogen rates with minimal bias. Although the methodological extension proposed here is primarily motivated by the needs of OFPE, it holds potential for a wide range of applications in applied economics where continuous treatments and heterogeneous effects are of interest.
 
 
 # Method
 
 ## Models and estimation procedures
 
-The standard approach in the precision-agriculture literature for estimating site-specific input response is to model the outcome level directly as a function of the treatment/input and covariates—e.g., estimate $Y=f(I,C)$ where $I$ is the input (like nitrogen rate) and $C$ are field characteristics—and then derive optimal input decisions from that estimated function. This is what is typically done in the recent on-farm precision experimentation literature (e.g., @barbosa2020risk; @barbosa2020modeling; @krause2020random; @gardner2021economic).
-The problem is that these methods optimize prediction of yield levels—not the causal effect of changing the input. Good level prediction at the observed input does not guarantee accurate recovery of the response function needed for optimal input choice, because the fitted $f(I,C)$ can conflate input variation with confounding and misattribute the drivers of yield variation.
+The standard approach in the precision-agriculture literature for estimating site-specific input response is to model the outcome level directly as a function of the treatment/input and covariates—e.g., estimate $Y=f(I,C)$ where $I$ is the input (like nitrogen rate) and $C$ are field characteristics, and then derive optimal input decisions from that estimated function. This is what is typically done in the recent on-farm precision experimentation literature (e.g., @barbosa2020risk; @barbosa2020modeling; @krause2020random; @gardner2021economic). The problem is that these methods optimize prediction of yield levels—not the causal effect of changing the input. Good level prediction at the observed input does not guarantee accurate recovery of the response function needed for optimal input choice, because the fitted $f(I,C)$ can confound the effect of the input with other factors that also affect yield.
 
-To identify causal effects rather than just predict levels in the single binary treatment case, researchers use double/debiased machine learning (DML), which introduces orthogonalization so the treatment-effect estimator is insensitive to small errors in the auxiliary fits (@chernozhukov2018double; @mackey2018orthogonal). 
-Consider the structural model (Model 1):
-
-
-
+To identify causal effects rather than just predict levels in the single binary treatment case, researchers use double/debiased machine learning (DML), which introduces orthogonalization so the treatment-effect estimator is insensitive to small errors in the auxiliary fits (@chernozhukov2018double; @mackey2018orthogonal). Consider the structural model (Model 1):
 
 $$
-Y=\theta(X) T+g(X, W)+v
+Y=\theta(X) T+g(X, W)+v,
 $$
 
-
-where $Y$ is the outcome, $T \in\{0,1\}$  is the treatment, $X$ covariates that also modify the treatment effect $\theta(X)$, $W$ additional predictors of $Y$, and $v$ is noise. 
-Orthogonalization estimates $f(X, W)=\mathbb{E}[Y \mid X, W]$ and $h(X, W)=\mathbb{E}[T \mid X, W]$, forms residuals $Y_{\mathrm{res}}=Y-f(X,W)$ and $T_{\mathrm{res}}=T-h(X, W)$, and then relates $Y_{\mathrm{res}}$ to $T_{\mathrm{res}}$. Because this score is Neyman-orthogonal and is typically implemented with cross-fitting, small errors in $f$ and $h$ do not induce first-order bias in $\theta(X)$ [(@chernozhukov2018double].
+where $Y$ is the outcome, $T \in\{0,1\}$ is the treatment, vector $X$ contains the covariates that also modify the treatment effect $\theta(X)$, vector $W$ contains additional predictors of $Y$, and $v$ is noise. Orthogonalization estimates $f(X, W)=\mathbb{E}[Y \mid X, W]$ and $h(X, W)=\mathbb{E}[T \mid X, W]$, forms residuals $Y_{\mathrm{res}}=Y-f(X,W)$ and $T_{\mathrm{res}}=T-h(X, W)$, and then relates  $Y_{\mathrm{res}}$ to $T_{\mathrm{res}}$. Because this score is Neyman-orthogonal and is typically implemented with cross-fitting, small errors in $f$ and $h$ do not induce first-order bias in $\theta(X)$ [(@chernozhukov2018double].
 
 The identifying algebra in Model 1 follows from linearity in $T$:
 
 $$
 \begin{align*}
-\mathbb{E}[Y \mid X, W]=\theta(X) \mathbb{E}[T \mid X, W]+g(X, W)=\theta(X) h(X, W)+g(X, W)
+\mathbb{E}[Y \mid X, W]=\theta(X) \mathbb{E}[T \mid X, W]+g(X, W)=\theta(X) h(X, W)+g(X, W),
 \end{align*}
 $$
 
@@ -241,11 +230,11 @@ so
 
 $$
 \begin{align*}
-Y_{\mathrm{res}}=Y-\mathbb{E}[Y \mid X, W]=\theta(X)(T-h(X, W))+v=\theta(X) T_{\mathrm{res}}+v
+Y_{\mathrm{res}}=Y-\mathbb{E}[Y \mid X, W]=\theta(X)(T-h(X, W))+v=\theta(X) T_{\mathrm{res}}+v.
 \end{align*}
 $$
 
-Thus regressing $Y_{\mathrm{res}}$ on $T_{\mathrm{res}}$ recovers $\theta(X)$ up to noise.
+Thus regressing $Y_{\mathrm{res}}$ on $T_{\mathrm{res}}$ identifies $\theta(X)$ with the remaining variation captured by the error term $v$. 
 
 @kakimoto2022causal applied this framework to estimate heterogeneous treatment effects of nitrogen on yield. However, when data are pooled across fields and applied nitrogen rates become continuous, the standard residualization of the treatment in DML does not extend cleanly to that setting.
 
@@ -253,26 +242,23 @@ Consider the continuous-treatment setting, where the structural model is
 
 $$
 \begin{align*}
-Y=\theta(X, T)+g(X, W)+v
+Y=\theta(X, T)+g(X, W)+v,
 \end{align*}
 $$
 
-with $T$ (e.g., nitrogen rate) continuous, and $X$ heterogeneity-inducing covariates that interact with $T$ through the flexible response function $\theta(X, T)$. In this case double-orthogonalization fails because $\theta$ is a general (nonlinear and interaction-rich) function of $T$. Residualizing the treatment by replacing $T$ with $T-\mathbb{E}[T \mid X, W]$ does not produce a valid adjustment for the heterogeneous effect. Formally,
+with $T$ (e.g., nitrogen rate) continuous, and $X$ comprising heterogeneity-inducing covariates that interact with $T$ through the flexible response function $\theta(X, T)$. In this case double-orthogonalization fails because $\theta$ is a general (nonlinear and interaction-rich) function of $T$. Residualizing the treatment by replacing $T$ with $T-\mathbb{E}[T \mid X, W]$ does not produce a valid adjustment for the heterogeneous effect. Formally,
 
 $$
 \begin{align*}
-\theta(X, T)-\mathbb{E}[\theta(X, T) \mid X, W] \neq \theta(X, T-\mathbb{E}[T \mid X, W])
+\theta(X, T)-\mathbb{E}[\theta(X, T) \mid X, W] \neq \theta(X, T-\mathbb{E}[T \mid X, W]),
 \end{align*}
 $$
 
-and the clean decomposition that underlies double-orthogonalization in the linear-in-$T$ case breaks down. 
-
-Instead, we apply single-orthogonalization (SO). We first estimate $f(X, W)=\mathbb{E}[Y \mid X, W]$ and form the residual $Y_{\mathrm{res}}=Y-f(X, W)$, and then recover $\theta(X, T)$ by flexibly modeling  $Y_{\mathrm{res}}$ as a function of $(X,T)$. This approach removes baseline variation due to $g(X,W)$ while preserving the full interaction structure between $X$ and the continuous treatment.
+and the clean decomposition that underlies double-orthogonalization in the linear-in-$T$ case breaks down. Instead, we apply single-orthogonalization (SO). We first estimate $f(X, W)=\mathbb{E}[Y \mid X, W]$ and form the residual $Y_{\mathrm{res}}=Y-f(X, W)$, and then recover $\theta(X, T)$ by flexibly modeling  $Y_{\mathrm{res}}$ as a function of $(X,T)$. This approach removes baseline variation due to $g(X,W)$ while preserving the full interaction structure between $X$ and the continuous treatment.
 
 ::: {.column-margin}
-<span style = "color: blue;"> We will add justifications for this action later. </span>
+[We will add justifications for this action later.]{style="color: blue;"}
 :::
-<!--end of column-margin-->
 
 To study and compare these ideas systematically, we adopt a single underlying structural model and then implement alternative orthogonalization schemes.
 
@@ -280,12 +266,11 @@ The model of interest throughout is (Model 3)
 
 $$
 \begin{align*}
-y = f(X, N) + g(X,W) + v
+y = f(X, N) + g(X,W) + v,
 \end{align*}
 $$
 
-where $y$ is crop yield, $N$ is the continuous nitrogen rate, $X$ is a set of covariates that induce heterogeneity in the impact of $N$ on $y$, and $W$ is a set of covariates that affect $y$ but do not interact with $N$. 
-We implement three estimation strategies—double-orthogonalized, single-orthogonalized, and non-orthogonalized—that differ only in how (and whether) the outcome and treatment are residualized before the final fit. Orthogonalization means fitting a variable on its conditioning covariates and using the residual (observed minus predicted) so that the subsequent learner focuses on variation not explained by those covariates; all residualizations are performed with random forests. In the double-orthogonalized approach, both $y$ and $N$ are residualized with respect to $(X,W)$ and the final learner is trained on those residuals. In the single-orthogonalized approach, only $y$ is residualized and the raw $N$ is retained. The non-orthogonalized specification skips residualization entirely and fits the learner directly to $(y,N,X,W)$. For each strategy we consider three final-stage learners—neural networks (NN), random forests (RF), and causal forests (CF)—to evaluate how the orthogonalization scheme and learning algorithm interact in recovering heterogeneous nitrogen response.
+where $y$ is crop yield, $N$ is the continuous nitrogen rate, $X$ is a set of covariates that induce heterogeneity in the impact of $N$ on $y$, and $W$ is a set of covariates that affect $y$ but do not interact with $N$. We implement three estimation strategies that differ only in how (and whether) the outcome and treatment are residualized before the final fit: double-orthogonalized, single-orthogonalized, and non-orthogonalized. Orthogonalization means fitting a variable on its conditioning covariates and using the residual (observed minus predicted) so that the subsequent learner focuses on variation not explained by those covariates; all residualizations are performed with random forests. In the double-orthogonalized approach, both $y$ and $N$ are residualized with respect to $(X,W)$ and the final learner is trained on those residuals. In the single-orthogonalized approach, only $y$ is residualized and the raw N is retained. The non-orthogonalized specification skips residualization entirely and fits the learner directly to $(y,N,X,W)$. For each strategy we consider three final-stage learners—neural networks (NN), random forests (RF), and causal forests (CF)—to evaluate how the orthogonalization scheme and learning algorithm interact in recovering heterogeneous nitrogen response.
 
 
 The table below shows all the cases we consider.
@@ -311,7 +296,7 @@ flextable::save_as_image(f_est, here::here("writing/f_est.png"), res = 300)
 ```{r}
 #| echo: false
 #| fig-width: 4
-#| out-width: 4in
+#| out-width: 7in
 knitr::include_graphics(here::here("writing/f_est.png"))
 ```
 
@@ -321,36 +306,35 @@ In the single-orthogonalized framework only the baseline component $g(X,W)$ is p
 
 $$
 \begin{align*}
-\tilde{y}=y-\widehat{g}(X,W)
+\tilde{y}=y-\widehat{g}(X,W).
 \end{align*}
 $$
 
-The second stage fits a flexible model of $\tilde{y}$ on $(X,N)$ to recover the heterogeneous response function $f(X,N)$. The distinction between SO-NN and SO-RF is only in the choice of the final learner: SO-NN uses a neural network, while SO-RF uses a random forest. In both cases the learner estimates $\hat{f}(X, N)$, which is then used to predict yield under candidate nitrogen rates. Marginal profit is computed over a grid of $N$ values and the economically optimal nitrogen rate is selected as the one that maximizes 
+The second stage fits a flexible model of $\tilde{y}$ on $(X,N)$ to recover the heterogeneous response function $f(X,N)$. The distinction between SO-NN and SO-RF is only in the choice of the final learner: SO-NN uses a neural network, while SO-RF uses a random forest. In both cases the learner estimates $\hat{f}(X, N)$, which is then used to predict yield under candidate nitrogen rates. Marginal profit is computed over a grid of $N$ values and the economically optimal nitrogen rate is selected as the one that maximizes
 
 $$
 \begin{align*}
-\widehat{\mathrm{EONR}}=\arg \max _N\left[P_{\text {Corn }} \times \hat{f}(X, N)-P_N \times N\right]
+\widehat{\mathrm{EONR}}=\arg \max _N\left[P_{\text {Corn }} \times \hat{f}(X, N)-P_N \times N\right],
 \end{align*}
 $$
-where $P_{\text {Corn }}$ is the corn price, $P_{\text {N }}$ is the nitrogen price, and $\hat{f}$ is the estimated yield response.
+where $P_{\text {Corn }}$ is the corn price, $P_{\text {N }}$ is the nitrogen price, and $\hat{f}$ is the estimated yield response function.
 
-### Double-orthogonalized CF (DO-CF) and ANN (DO-ANN) 
+### Double-orthogonalized CF (DO-CF) and NN (DO-NN) 
 
 #### DO‑CF (continuous)
 
+To adapt double-orthogonalization to Model 3, we estimate the heterogeneous response $f(X,N)$ by expanding the continuous treatment $N$ in a set of spline basis functions and allowing their coefficients to vary with the heterogeneity-inducing covariates $X$.
 
-To adapt double-orthogonalization to the model of interest (Model 3), we estimate the heterogeneous response $f(X,N)$ by expanding the continuous treatment $N$ in a set of spline basis functions and allowing their coefficients to vary with the heterogeneity-inducing covariates $X$.
-
-In spline regression, a single variable can be decomposed into multiple basis functions in a linear-in-parameter manner. For example consider the following general model, where the non-linear impact of $T$ is represented by $f(T)$.
+In spline regression, a single variable can be decomposed into multiple basis functions in a linear-in-parameter manner. For example, consider the following general model, where the non-linear impact of $T$ is represented by $f(T)$:
 
 $$
-y = f(T) + v 
+y = f(T) + v. 
 $$
 
 Non-linearity in $f(T)$ can be captured by a linear combination of basis functions as follows:
 
 $$
-f(T) = \alpha_1 \cdot S_1(T) + \alpha_2 \cdot S_2(T) \dots, + \alpha_K \cdot S_K(T) = \sum_{k=1}^K \alpha_k \cdot S_k(T)
+f(T) = \alpha_1 \cdot S_1(T) + \alpha_2 \cdot S_2(T) \dots, + \alpha_K \cdot S_K(T) = \sum_{k=1}^K \alpha_k \cdot S_k(T),
 $$
 
 where $\alpha_k$ is the coefficient to be estimated and $S_k(T)$ is the value of the basis function $S_k(\cdot)$ evaluated at $T$. By changing the value of $\alpha_k$, $\sum_{k=1}^K \alpha_k S_k(T)$ can flexibly approximate various non-linear functions that cannot be captured by commonly used functional forms. In spline regression, the weights (or coefficients) are obtained by regression with the spline bases included as covariates.
@@ -359,13 +343,13 @@ where $\alpha_k$ is the coefficient to be estimated and $S_k(T)$ is the value of
 knitr::include_graphics(here::here("writing/Figures/g_tsp_fit.pdf"))
 ```
 
-@fig-spline-examples shows the fitted line (red line), which is the sum of the six weighted (multiplied by coefficients) thin-plate splines (dotted lines). As can be seen, the fitted line closely traces the the true yield response function (blue line).
+@fig-spline-examples shows the fitted line (red line), which is the sum of the six weighted (multiplied by coefficients) thin-plate splines (dotted lines). As can be seen, the fitted line closely traces the true yield response curve (blue line).
 
-Since this modeling approach is linear-in-parameter, it can be readily used inside the CF framework. Instead of a constant as the weight (coefficient) for each spline basis function, the weight is made a function of observables, $X$, as follows:
+Since this modeling approach is linear-in-parameters, it can be readily used inside the CF framework. Instead of a constant as the weight (coefficient) for each spline basis function, the weight is made a function of observables, $X$, as follows:
 
 $$
 \begin{align*}
-y=\sum_{k=1}^K f_k(X) S_k(N)+g(X, W)+v
+y=\sum_{k=1}^K f_k(X) S_k(N)+g(X, W)+v.
 \end{align*}
 $$
 
@@ -381,13 +365,13 @@ $$
 
 so causal forest can nonparametrically estimate each heterogeneous weight $f_k(X)$  by relating the residualized outcome to the residualized spline bases. This Neyman-orthogonal (R-learner) style decomposition preserves the ability to capture complex, heterogeneous, and nonlinear treatment effects while inheriting the robustness of double-orthogonalization: small errors in the nuisance fits for $g(X,W)$ or the conditional means of the bases do not induce first-order bias in $f_k(X)$. The estimated $f_k(X)$ then combine to recover the full heterogeneous response function and, by differencing across candidate $N$ values, site-specific treatment effects and economically optimal nitrogen rates.
 
-#### DO‑ANN
+#### DO‑NN
 
-In the DO-ANN approach, we apply double-orthogonalization to Model 3 by residualizing both the outcome $y$ and the continuous treatment $N$ with respect to $(X, W)$ using cross-fitted random forests:
+In the DO-NN approach, we apply double-orthogonalization to Model 3 by residualizing both the outcome $y$ and the continuous treatment $N$ with respect to $(X, W)$ using cross-fitted random forests:
 
 $$
 \begin{align*}
-\tilde{y}=y-\widehat{\mathbb{E}}[y \mid X, W], \quad \tilde{N}=N-\widehat{\mathbb{E}}[N \mid X, W]
+\tilde{y}=y-\widehat{\mathbb{E}}[y \mid X, W], \quad \tilde{N}=N-\widehat{\mathbb{E}}[N \mid X, W].
 \end{align*}
 $$
 
@@ -395,7 +379,7 @@ The final-stage learner is a neural network that models $\tilde{y}$ as a linear 
 
 $$
 \begin{align*}
-\hat{\tilde{y}}=\hat{\theta}(X) \cdot \tilde{N}
+\hat{\tilde{y}}=\hat{\theta}(X) \cdot \tilde{N}.
 \end{align*}
 $$
 
@@ -415,16 +399,14 @@ For each simulation round, we evaluate model performance by calculating the root
 
 $$
 \begin{align*}
-RMSE_{EONR}=\sqrt{\frac{1}{n} \sum_{i=1}^n\left(\widehat{EONR}_i-EONR_i\right)^2}
+RMSE_{EONR}=\sqrt{\frac{1}{n} \sum_{i=1}^n\left(\widehat{EONR}_i-EONR_i\right)^2}.
 \end{align*}
 $$
-
-
 To assess the economic relevance of these modeling approaches, we use profit loss relative to the true site-specific EONR. The average per-acre profit from true site-specific EONR (denoted as $\pi_{true}$) is
 
 $$
 \begin{align}
-\pi_{true}  = \frac{1}{N}\cdot \sum_{i=1}^{N} [P_c \cdot f(N^*_i, X_i) - P_N \cdot N^*_i]
+\pi_{true}  = \frac{1}{N}\cdot \sum_{i=1}^{N} [P_c \cdot f(N^*_i, X_i) - P_N \cdot N^*_i].
 \end{align}
 $$
 Where $P_c$ and $P_N$ represent the prices of corn yield and nitrogen, respectively.
@@ -433,15 +415,15 @@ The average profit per acre associate with the site-specific N prescription by e
 
 $$
 \begin{align}
-\pi_m  = \frac{1}{N}\cdot \sum_{i=1}^{N} [P_c \cdot f(\widehat{N}^*_{m}(X_i), X_i) - P_N \cdot \widehat{N}^*_{m}(X_i)]
+\pi_m  = \frac{1}{N}\cdot \sum_{i=1}^{N} [P_c \cdot f(\widehat{N}^*_{m}(X_i), X_i) - P_N \cdot \widehat{N}^*_{m}(X_i)].
 \end{align}
 $$
 
-Then the profit loss of model $m$ relative to the true maximum profit achievable (denoted as $\pi-loss_{m}$) is then defined as
+The profit loss of model $m$ relative to the true maximum profit achievable is then defined as
 
 $$
 \begin{align}
-\Delta\pi_m  = \pi_{true} - \pi_m
+\Delta\pi_m  = \pi_{true} - \pi_m.
 \end{align}
 $$
 
@@ -454,7 +436,7 @@ Our simulation consists of 500 independently generated fields, each representing
 
 For each simulation round, one field is selected as the test field. The remaining fields are used to construct the training set in three scenarios: (1) one-field training, (2) three-field training, (3) five-field training, (4) ten-field training and (5) twenty-field training. These scenarios allow us to assess how model performance changes with the size and diversity of training data. Within each round, the model is trained on the designated number of training fields and then used to estimate the yield response function and the site-specific EONR for the test field.
 
-The experimental design within each field consists of randomized nitrogen treatment rates applied across plots. The nitrogen rates vary between fields and are drawn to reflect realistic trial setups that span a range of agronomic optima. For evaluation purposes, we use a grid of candidate nitrogen rates to compute predicted yield and associated marginal profit for each observation. The predicted EONR is the nitrogen rate that maximizes predicted profit.
+The experimental design within each field consists of nitrogen treatment rates assigned according to a blocked Latin square design. The nitrogen rates vary between fields and are drawn to reflect realistic trial setups that span a range of agronomic optima. For evaluation purposes, we use a grid of candidate nitrogen rates to compute predicted yield and associated marginal profit for each observation. The predicted EONR is the nitrogen rate that maximizes predicted profit.
 
 ## Data generation
 
@@ -647,9 +629,216 @@ Visual representation of the field layout is presented in @fig-field-layout. The
 # )
 ```
 
+```{r}
+####$$$$$$$$ MAKING SUBPLOTS CLEAR #########$$$$$$$$$$$$$$$
+
+
+
+# /*+++++++++++++++++++++++++++++++++++
+#' ## Plots
+# /*+++++++++++++++++++++++++++++++++++
+
+# library(patchwork)
+# 
+# 
+# all_data <- readRDS(here::here("data/raw_sim_data.rds"))
+# field_sf <- all_data$field_sf[[1]]
+# 
+# 
+# plot_sf <-
+#   field_sf %>%
+#   nest_by(plot_id) %>%
+#   mutate(data = list(
+#     st_union(data)
+#   )) %>%
+#   unnest() %>%
+#   st_as_sf()
+# 
+# plot_focus <- filter(plot_sf, plot_id == 283)
+# 
+# plot_focus_xy <-
+#   st_centroid(plot_focus) %>%
+#   st_coordinates()
+# 
+# bbox_field <- st_bbox(plot_sf)
+# min_x_field <- bbox_field["xmin"]
+# max_x_field <- bbox_field["xmax"]
+# center_x_field <- mean(c(min_x_field, max_x_field))
+# min_y_field <- bbox_field["ymin"]
+# max_y_field <- bbox_field["ymax"]
+# center_y_field <- mean(c(min_y_field, max_y_field))
+# 
+# g_field <-
+#   ggplot() +
+#   geom_sf(data = plot_sf, linewidth = 1, fill = NA) +
+#   geom_sf(data = plot_focus, fill = "red", alpha = 0.5) +
+#   #--- horizontal width ---#
+#   geom_segment(
+#     aes(x = center_x_field - 72, xend = min_x_field, y = max_y_field + 18, yend = max_y_field + 18),
+#     arrow = arrow(length = unit(0.3, "cm"))
+#   ) +
+#   geom_segment(
+#     aes(x = center_x_field + 72, xend = max_x_field, y = max_y_field + 18, yend = max_y_field + 18),
+#     arrow = arrow(length = unit(0.3, "cm"))
+#   ) +
+#   annotate(
+#     "text",
+#     x = center_x_field,
+#     y = max_y_field + 18,
+#     label = "2,835 feet"
+#   ) +
+#   #--- vertical length ---#
+#   geom_segment(
+#     aes(x = max_x_field + 18, xend = max_x_field + 18, y = center_y_field + 60, yend = max_y_field),
+#     arrow = arrow(length = unit(0.3, "cm"))
+#   ) +
+#   geom_segment(
+#     aes(x = max_x_field + 18, xend = max_x_field + 18, y = center_y_field - 60, yend = min_y_field),
+#     arrow = arrow(length = unit(0.3, "cm"))
+#   ) +
+#   annotate(
+#     "text",
+#     x = max_x_field + 18,
+#     y = center_y_field,
+#     label = "1,417 feet",
+#     angle = "270"
+#   ) +
+#   #--- expansion to the focus plot ---#
+#   geom_segment(
+#     aes(x = plot_focus_xy[1, "X"] - 36, xend = min_x_field, y = plot_focus_xy[1, "Y"] - 9, yend = plot_focus_xy[1, "Y"] - 120),
+#     color = "red"
+#   ) +
+#   geom_segment(
+#     aes(x = plot_focus_xy[1, "X"] + 36, xend = max_x_field, y = plot_focus_xy[1, "Y"] - 9, yend = plot_focus_xy[1, "Y"] - 120),
+#     color = "red"
+#   ) +
+#   annotate(
+#     "text",
+#     y = plot_focus_xy[1, "Y"],
+#     x = plot_focus_xy[1, "X"],
+#     label = "Plot",
+#     size = 3
+#   ) +
+#   theme_void()
+# 
+# # /*+++++++++++++++++++++++++++++++++++
+# #' ## inside a plot
+# # /*+++++++++++++++++++++++++++++++++++
+# plot_sf_focus <- filter(field_sf, plot_id == 1)
+# 
+# bbox_plot <- st_bbox(plot_sf_focus)
+# min_x_plot <- bbox_plot["xmin"]
+# max_x_plot <- bbox_plot["xmax"]
+# center_x_plot <- mean(c(min_x_plot, max_x_plot))
+# min_y_plot <- bbox_plot["ymin"]
+# max_y_plot <- bbox_plot["ymax"]
+# center_y_plot <- mean(c(min_y_plot, max_y_plot))
+# 
+# subplot_sf <-
+#   plot_sf_focus %>%
+#   nest_by(aunit_id, buffer) %>%
+#   mutate(data = list(
+#     st_union(data)
+#   )) %>%
+#   unnest() %>%
+#   st_as_sf() %>%
+#   mutate(label = ifelse(
+#     buffer == 1,
+#     "buffer",
+#     paste0("subplot-", aunit_id - 1)
+#   )) %>%
+#   mutate(buf_or_not = ifelse(label == "buffer", "buffer", "subplot"))
+# 
+# subplot_text_sf <- st_centroid(subplot_sf)
+# 
+# cell_sf <- plot_sf_focus[7, ]
+# 
+# bbox_cell <- st_bbox(cell_sf)
+# min_x_cell <- bbox_cell["xmin"]
+# max_x_cell <- bbox_cell["xmax"]
+# center_x_cell <- mean(c(min_x_cell, max_x_cell))
+# min_y_cell <- bbox_cell["ymin"]
+# max_y_cell <- bbox_cell["ymax"]
+# center_y_cell <- mean(c(min_y_cell, max_y_cell))
+# 
+# g_inside_plot <-
+#   ggplot() +
+#   geom_sf(data = plot_sf_focus, size = 0.2, fill = NA) +
+#   #--- horizontal width ---#
+#   geom_segment(
+#     aes(x = center_x_plot - 6, xend = min_x_plot, y = min_y_plot - 3, yend = min_y_plot - 3),
+#     arrow = arrow(length = unit(0.3, "cm"))
+#   ) +
+#   geom_segment(
+#     aes(x = center_x_plot + 6, xend = max_x_plot, y = min_y_plot - 3, yend = min_y_plot - 3),
+#     arrow = arrow(length = unit(0.3, "cm"))
+#   ) +
+#   annotate(
+#     "text",
+#     x = center_x_plot,
+#     y = min_y_plot - 3,
+#     label = "236 feet"
+#   ) +
+#   geom_sf(data = filter(subplot_sf, buffer == 1), fill = "yellow", alpha = 0.4) +
+#   geom_sf(data = filter(subplot_sf, buffer == 1), fill = "yellow", alpha = 0.4) +
+#   geom_sf(
+#     data = filter(subplot_sf, buffer == 0),
+#     linewidth = 1.2,
+#     fill = NA,
+#     color = "red"
+#   ) +
+#   
+#   # keep buffer outline separate
+#   geom_sf(
+#     data = filter(subplot_sf, buffer == 1),
+#     linewidth = 1.0,
+#     fill = NA,
+#     color = "black"
+#   ) +
+#   
+#   geom_sf_text(data = subplot_text_sf, aes(label = label), size = 4, color = "blue") +
+#   geom_sf(data = cell_sf, fill = "green", alpha = 0.3) +
+#   #--- horizontal width of the cell ---#
+#   geom_segment(
+#     aes(x = center_x_cell, xend = min_x_cell, y = max_y_cell + 1, yend = max_y_cell + 1),
+#     arrow = arrow(length = unit(0.2, "cm"))
+#   ) +
+#   geom_segment(
+#     aes(x = center_x_cell, xend = max_x_cell, y = max_y_cell + 1, yend = max_y_cell + 1),
+#     arrow = arrow(length = unit(0.2, "cm"))
+#   ) +
+#   annotate(
+#     "text",
+#     x = center_x_cell,
+#     y = max_y_plot + 3,
+#     label = "19.7 feet"
+#   ) +
+#   annotate("text", x = 39, y = 429, label = "cell") +
+#   scale_fill_discrete(name = "") +
+#   theme_void() +
+#   theme(
+#     legend.position = "bottom",
+#     legend.text = element_text(size = 12)
+#   )
+# 
+# g_layout <- g_field / g_inside_plot
+# 
+# saveRDS(g_layout, here::here("writing/Figures/g_layout.rds"))
+# 
+# ggsave(
+#   g_layout,
+#   file = here::here("writing/Figures/g_layout.pdf"),
+#   width = 6.5,
+#   height = 6
+# )
+
+
+```
+
 ```{r fig-field-layout, fig.cap = "Visualization of the field layout and components"}
 knitr::include_graphics(here::here("Writing/Figures/g_layout.pdf"))
 ```
+
 Cell-level yields are generated following the quadratic-plateau functional form as follows:
 
 $$
@@ -660,13 +849,12 @@ y_{i,j} =
     \eta_{i,j} + \varepsilon_{i,j}, & N \ge \tau_{i,j}
   \end{cases}
 \end{aligned}
-\label{eq:yield-gen-sim}
-$$
+$$ {#eq-yield-gen-sim}
 
 
 In this formulation, yield increases as $N_{i,j}$ increase until $N_{i,j}$ reaches $\tau_{i,j}$, at which yield hits the plateau, $\eta_{i,j}$. The yield level at $N_{i,j}= 0$ is $\alpha_{i,j}$. The rate at which yield increases with respect to $N_{i,j}$ is governed by $\beta_{i,j}$ and $\gamma_{i,j}$. For a given cell, the quadratic-plateu function has five parameters, but the degree of freedom is only three. That is, once any three of the five parameters are determined, then the rest of the parameters are automatically determined. Specifically, we first generated $\alpha_{i,j}$, $\eta_{i,j}$, and $\tau_{i,j}$ in a spatially correlated manner following the Gaussian bluh bluh process (cite), and then $\beta_{i,j}$ and $\gamma_{i,j}$ were derived. The erorr term ($\varepsilon_{i,t}$) is generated using the same spatial process. This is repeated independently 500 times to create 500 fields of the same size but different spatial distribution and values of the three parameters.
 
-Trial designs vary field by field based on the value of $\tau_{i,j}$. Specifically, the lowest nitrogen rate is set at the minimum of $\tau_{i,j}$ of the field minus 50, and the highest rate is set at the maximum of $\tau_{i,j}$ of the field plus 30. We then create a sequence of equi-distance 5-level nitrogen rates. Once the unique nitrogen levels are determined, a Latin square design is used as a trial design (see  @fig-trial-design) for an example trial design). This ensures that nitrogen rate is orthogonal to any variable including the error term, avoiding endogeneity problem as done in OFPE in real world. Now, yield values at the cell level can be calculated by plugging in the value of $N_{i,j}$, $\alpha_{i,j}$, $\eta_{i,j}$, $\tau_{i,j}$, and $\varepsilon_{i,j}$ into Equation~\ref{eq:yield-gen-sim}.
+Trial designs vary field by field based on the value of $\tau_{i,j}$. Specifically, the lowest nitrogen rate is set at the minimum of $\tau_{i,j}$ of the field minus 50, and the highest rate is set at the maximum of $\tau_{i,j}$ of the field plus 30. We then create a sequence of equi-distance 5-level nitrogen rates. Once the unique nitrogen levels are determined, a Latin square design is used as a trial design (see  @fig-trial-design) for an example trial design). This ensures that nitrogen rate is orthogonal to any variable including the error term, avoiding endogeneity problem as done in OFPE in real world. Now, yield values at the cell level can be calculated by plugging in the value of $N_{i,j}$, $\alpha_{i,j}$, $\eta_{i,j}$, $\tau_{i,j}$, and $\varepsilon_{i,j}$ into @eq-yield-gen-sim.
 
 
 ```{r}
@@ -697,7 +885,7 @@ readRDS(here::here("writing/Figures/g_td.rds"))
 
 # Simulation Results 
 
-We compare six estimators—CF, SO_ANN, DO_ANN, NO_ANN, SO_RF, and NO_RF—over 500 Monte-Carlo replications and five training sizes (1, 3, 5, 10 and 20 fields). Each replication contains 1,440 evaluation units. Accuracy is assessed by the RMSE of the estimated economically optimal nitrogen rate (EONR) with respect to the true (simulated) EONR. 
+We compare six estimators:  CF, SO_NN, DO_ANN, NO_ANN, SO_RF, and NO_RF over 500 Monte-Carlo replications and five training sizes (1, 3, 5, 10 and 20 fields). Each replication contains 1,440 evaluation units. Accuracy is assessed by the RMSE of the estimated economically optimal nitrogen rate (EONR) with respect to the true (simulated) EONR.
 
 
 ```{r sim-setup, include=FALSE}
@@ -716,9 +904,9 @@ rmse_tbl_raw <- readRDS(here::here("results", "rmse_tbl_raw.rds"))
 
 ```
 
-Taken together, @fig-rmse-hist and @fig-avg-performance illustrate clear performance patterns across methods and training sizes. CF delivers low and tightly concentrated RMSE distributions even with limited data—consistently maintaining strong accuracy and stability for 1–5 fields (mean RMSE ≈ 14.7, 13.1, and 12.1, respectively), with only modest additional gains at 10 and 20 fields (11.9–11.8). SO_ANN initially lags behind CF (18.4 at one field), but its mean RMSE decreases steadily as more fields are added, surpassing CF performance at 10 and 20 fields (11.2 and 8.5, respectively). This pattern hilightes the neural network’s ability to exploit richer spatial and agronomic heterogeneity when sufficient training data are available.
+Taken together, @fig-rmse-hist and @fig-avg-performance illustrate clear performance patterns across methods and training sizes. CF delivers low and tightly concentrated RMSE distributions even with limited data—consistently maintaining strong accuracy and stability for 1–5 fields (mean RMSE ≈ 14.7, 13.1, and 12.1, respectively), with only modest additional gains at 10 and 20 fields (11.9–11.8). SO_NN initially lags behind CF (18.4 at one field), but its mean RMSE decreases steadily as more fields are added, surpassing CF performance at 10 and 20 fields (11.2 and 8.5, respectively). This pattern hilightes the neural network’s ability to exploit richer spatial and agronomic heterogeneity when sufficient training data are available.
 
-By contrast, NO_ANN exhibits substantial instability in the single-field case, with a heavy right tail and much higher errors, but rapidly converges toward the leading methods by 5–10 fields (mean RMSE improving to around 14–13), highlighting its strong dependence on sample size. SO_RF improves modestly with more fields (mid-20s RMSE for 10–20 fields) but remains consistently less accurate than SO_ANN or CF. NO_RF maintains broad, right-shifted distributions and higher mean errors throughout (≈ 36–40), confirming its role as a weak baseline. Finally, DO_ANN performs poorly throughout, with both histograms and means showing persistently high errors (≈ 90+) and negligible benefit from additional data, showing that the orthogonalization step breaks the original relationships in the data instead of preserving them.
+By contrast, NO_ANN exhibits substantial instability in the single-field case, with a heavy right tail and much higher errors, but rapidly converges toward the leading methods by 5–10 fields (mean RMSE improving to around 14–13), highlighting its strong dependence on sample size. SO_RF improves modestly with more fields (mid-20s RMSE for 10–20 fields) but remains consistently less accurate than SO_NN or CF. NO_RF maintains broad, right-shifted distributions and higher mean errors throughout (≈ 36–40), confirming its role as a weak baseline. Finally, DO_ANN performs poorly throughout, with both histograms and means showing persistently high errors (≈ 90+) and negligible benefit from additional data, showing that the orthogonalization step breaks the original relationships in the data instead of preserving them.
 
 
 ```{r}
@@ -811,7 +999,7 @@ model_names <- function(models) {
     "CF"     = "CF",
     "DO_ANN" = "DO_NN",
     "NO_ANN" = "NO_NN",
-    "SO_ANN" = "SO_NN",
+    "SO_NN" = "SO_NN",
     "NO_RF"  = "NO_RF",
     "SO_RF"  = "SO_RF"
   )
@@ -937,7 +1125,7 @@ p_mean
 #   tab_source_note(source_note = gt::html(legend_html))
 ```
 
-@fig-improvement compares the performance of CF and SO_ANN relative to the worst-performing model, DO_ANN, across different numbers of fields. Both methods deliver large improvements in RMSE at all sample sizes. With only one field, CF and SO_ANN reduce error by roughly 80–84%. As more fields become available, both approaches strengthen further: CF’s improvement rises to about 87% by 5–10 fields, while SO_ANN continues to gain with increasing data, reaching nearly 91% at 20 fields.
+@fig-improvement compares the performance of CF and SO_NN relative to the worst-performing model, DO_ANN, across different numbers of fields. Both methods deliver large improvements in RMSE at all sample sizes. With only one field, CF and SO_NN reduce error by roughly 80–84%. As more fields become available, both approaches strengthen further: CF’s improvement rises to about 87% by 5–10 fields, while SO_NN continues to gain with increasing data, reaching nearly 91% at 20 fields.
 
 
 ```{r}
@@ -947,7 +1135,7 @@ p_mean
 #| fig-height: 7
 
 # compare to which model?
-baseline <- "DO_ANN"
+baseline <- "DO_NN"
 
 # average RMSE by Model × field
 
@@ -958,12 +1146,12 @@ rmse_df <- rmse_tbl_raw %>%
   dplyr::mutate(
     Model = dplyr::recode(
       Model,
-      "Simple_ANN" = "NO_ANN",
-      "HalfRANN"   = "SO_ANN",
-      "RANN"       = "DO_ANN",
-      "HalfRRF"    = "SO_RF",
-      "CF"         = "CF",
-      "NO_RF"      = "NO_RF",
+      "NO_ANN" = "NO_NN",
+      "SO_ANN"   = "SO_NN",
+      "DO_ANN"       = "DO_NN",
+      #"HalfRRF"    = "SO_RF",
+      #"CF"         = "CF",
+      #"NO_RF"      = "NO_RF",
       .default     = Model
     ),
     field_f = factor(`#field`, levels = c(1,3, 5, 10, 20),
@@ -976,7 +1164,7 @@ avg_by <- rmse_df %>%
   dplyr::group_by(Model, field_f) %>%
   dplyr::summarise(mean_rmse = mean(RMSE), .groups = "drop")
 
-models_to_keep <- c("SO_ANN", "CF")
+models_to_keep <- c("SO_NN", "CF")
 
 avg_by_filtered <- avg_by %>%
   dplyr::filter(Model %in% models_to_keep | Model == baseline)
@@ -1096,7 +1284,7 @@ p3 <- plot_yield_response("CF", 5, add_title = FALSE)
 #| include: false
 
 source(here("codes", "R", "visualize_yield_response_function.R"))
-#p4 <- plot_yield_response(model = "SO_ANN", n_fields = 10)
+#p4 <- plot_yield_response(model = "SO_NN", n_fields = 10)
 p4 <- plot_yield_response("SO_ANN", 10, add_title = FALSE)
 
 
@@ -1108,7 +1296,7 @@ p4 <- plot_yield_response("SO_ANN", 10, add_title = FALSE)
 #| include: false
 
 source(here("codes", "R", "visualize_yield_response_function.R"))
-#p5 <- plot_yield_response(model = "SO_ANN", n_fields = 20)
+#p5 <- plot_yield_response(model = "SO_NN", n_fields = 20)
 p5 <- plot_yield_response("SO_ANN", 20, add_title = FALSE)
 
 ```
@@ -1127,7 +1315,7 @@ library(patchwork)
 
 ```{r}
 # #| label: fig-yield-res-combined
-# #| fig-cap: "Yield response functions for CF and SO_ANN models across different field counts."
+# #| fig-cap: "Yield response functions for CF and SO_NN models across different field counts."
 # #| echo: false
 # #| fig-width: 10
 # #| fig-height: 8
@@ -1158,11 +1346,11 @@ knitr::include_graphics("Figures/best_models.png")
 
 @fig-yield-res-combined displays predicted and true yield response functions for the best-performing models at each training size. For the CF, shown for 1, 3, and 5 fields, the estimated curves closely track the overall shape of the true response but exhibit a slight upward bias in predicted yield levels. The general curvature, including diminishing returns at higher nitrogen rates, is captured consistently even under data-constrained conditions. As more fields are incorporated, the CF predictions become smoother and more aligned with the true function, reflecting improved generalization.
 
-For the SO_ANN, shown for 10 and 20 fields, the estimated response matches the true curve more closely in both slope and curvature, particularly at higher nitrogen levels where CF tended to flatten. At 20 fields, SO_ANN produces the most accurate approximation overall, with prediction and truth nearly coincident across the nitrogen range. These differences visually reinforce the earlier quantitative results: CF offers strong robustness with sparse multi-field data, while SO_ANN increasingly excels as richer spatial heterogeneity becomes available, enabling superior recovery of the underlying agronomic yield response function.
+For the SO_NN, shown for 10 and 20 fields, the estimated response matches the true curve more closely in both slope and curvature, particularly at higher nitrogen levels where CF tended to flatten. At 20 fields, SO_NN produces the most accurate approximation overall, with prediction and truth nearly coincident across the nitrogen range. These differences visually reinforce the earlier quantitative results: CF offers strong robustness with sparse multi-field data, while SO_NN increasingly excels as richer spatial heterogeneity becomes available, enabling superior recovery of the underlying agronomic yield response function.
 
 ```{r}
 #| label: fig-yield-res-combined
-#| fig-cap: "Yield response functions for CF and SO_ANN models across different field counts."
+#| fig-cap: "Yield response functions for CF and SO_NN models across different field counts."
 #| echo: false
 #| fig-width: 10
 #| fig-height: 8
@@ -1176,7 +1364,7 @@ title_CF <- grid::textGrob(
   gp = grid::gpar(fontsize = 13, fontface = "bold")
 )
 title_SO <- grid::textGrob(
-  "Single-Orthogonalized ANN (SO_ANN): 10 and 20 fields",
+  "Single-Orthogonalized ANN (SO_NN): 10 and 20 fields",
   gp = grid::gpar(fontsize = 13, fontface = "bold")
 )
 
@@ -1199,9 +1387,9 @@ title_SO <- grid::textGrob(
 
 # Discussion
 
-This study evaluates alternative causal-ML strategies for estimating heterogeneous yield response to a continuous nitrogen treatment in an OFPE setting. CF consistently attains low and tightly concentrated EONR errors with only 1–5 training fields, indicating strong small-sample stability (see @fig-rmse-hist and @fig-avg-performance). In contrast, SO_ANN improves monotonically with additional fields and ultimately dominates once ≥10 fields are available, achieving the lowest mean RMSE overall (e.g., 11.2 at 10 fields and 8.5 at 20 fields).
+This study evaluates alternative causal-ML strategies for estimating heterogeneous yield response to a continuous nitrogen treatment in an OFPE setting. CF consistently attains low and tightly concentrated EONR errors with only 1–5 training fields, indicating strong small-sample stability (see @fig-rmse-hist and @fig-avg-performance). In contrast, SO_NN improves monotonically with additional fields and ultimately dominates once ≥10 fields are available, achieving the lowest mean RMSE overall (e.g., 11.2 at 10 fields and 8.5 at 20 fields).
 
-This pattern is consistent with the structural differences between the two approaches. CF relies on orthogonalized residualization, which reduces sensitivity to first-stage estimation error and yields robustness in data-constrained settings. SO_ANN, by contrast, does not employ double orthogonalization and is therefore more reliant on accurate function approximation of the outcome–treatment relationship. As the number of training fields increases, the richer data environment mitigates this limitation, allowing SO_ANN to benefit from its greater representational flexibility and outperform CF in larger-sample settings. Taken together, these complementary strengths suggest that CF is preferred under data-constrained conditions, whereas SO_ANN becomes the method of choice as multi-field datasets accumulate.
+This pattern is consistent with the structural differences between the two approaches. CF relies on orthogonalized residualization, which reduces sensitivity to first-stage estimation error and yields robustness in data-constrained settings. SO_NN, by contrast, does not employ double orthogonalization and is therefore more reliant on accurate function approximation of the outcome–treatment relationship. As the number of training fields increases, the richer data environment mitigates this limitation, allowing SO_NN to benefit from its greater representational flexibility and outperform CF in larger-sample settings. Taken together, these complementary strengths suggest that CF is preferred under data-constrained conditions, whereas SO_NN becomes the method of choice as multi-field datasets accumulate.
 
 Methodologically, the contrast between single-orthogonalization and double-orthogonalization is central. For continuous treatments, the double-orthogonal residualization of the treatment does not generally preserve the relevant heterogeneous response structure. Our simulations reflect this: DO_ANN performs poorly and does not benefit from larger samples. In contrast, single-orthogonalization—residualizing only the outcome to remove baseline variation from covariates $W$—retains the full interaction between $X$ and $N$, allowing the final learner to recover the nonlinearity and heterogeneity of the response function. The extended CF strikes a different balance: by expressing $N$ through a spline basis and orthogonalizing the basis components, it restores a linear-in-parameters score that CF can learn reliably. 
 
@@ -1210,7 +1398,7 @@ Methodologically, the contrast between single-orthogonalization and double-ortho
 
 By combining orthogonalization with flexible final-stage learners, we demonstrate how to preserve the strengths of causal inference while accommodating continuous treatments and agronomic heterogeneity.
 
-Across 500 simulated test fields, two approaches consistently dominate: the extended causal forest and the single-orthogonalized neural network. CF is highly robust in small-sample environments, achieving strong accuracy even with training data from just one to five fields. As the number of training fields increases, SO_ANN increasingly improves as a result of spatial and agronomic diversity, ultimately delivering the best predictive accuracy of all methods once ten or more fields are available. In contrast, non-orthogonalized baselines require larger samples to become competitive and the doubly-orthogonalized ANN performs poorly in all conditions due to the incompatibility between double-orthogonalization and continuous treatments. Methodologically, our results highlight the importance of aligning the orthogonalization strategy with the structure of the treatment variable in causal ML applications.
+Across 500 simulated test fields, two approaches consistently dominate: the extended causal forest and the single-orthogonalized neural network. CF is highly robust in small-sample environments, achieving strong accuracy even with training data from just one to five fields. As the number of training fields increases, SO_NN increasingly improves as a result of spatial and agronomic diversity, ultimately delivering the best predictive accuracy of all methods once ten or more fields are available. In contrast, non-orthogonalized baselines require larger samples to become competitive and the doubly-orthogonalized ANN performs poorly in all conditions due to the incompatibility between double-orthogonalization and continuous treatments. Methodologically, our results highlight the importance of aligning the orthogonalization strategy with the structure of the treatment variable in causal ML applications.
 
 
 
