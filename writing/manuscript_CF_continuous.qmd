@@ -35,12 +35,8 @@ format:
     toc: true
 execute:
   echo: false
-bibliography: references.bib
+bibliography: PA.bib
 ---
-
-
-  
-
 
 ```{r}
 #| include: false
@@ -878,8 +874,59 @@ Trial designs vary field by field based on the value of $\tau_{i,j}$. Specifical
 # saveRDS(g_td, here::here("writing/Figures/g_td.rds"))
 ```
 
+```{r}
+# save a pdf of g_td
+
+# all_data <- readRDS(
+#   here::here("data", "raw_sim_data.rds")
+# )
+# 
+# trial_design <- data.table::as.data.table(
+#   all_data$trial_design[[1]]
+# )[sim == 1]
+# 
+# field <- data.table::as.data.table(
+#   all_data$field_sf[[1]]
+# )
+# 
+# td_sf <- trial_design[
+#   field,
+#   on = .(block_id, plot_in_block_id)
+# ] |>
+#   sf::st_as_sf()
+# 
+# g_td <- ggplot2::ggplot(td_sf) +
+#   ggplot2::geom_sf(
+#     ggplot2::aes(fill = factor(N_tgt)),
+#     color = NA
+#   ) +
+#   ggplot2::scale_fill_viridis_d(
+#     name = "Nitrogen Rate (lb/acre)"
+#   ) +
+#   ggplot2::theme_void() +
+#   ggplot2::theme(
+#     legend.position = "bottom"
+#   )
+# 
+# g_td
+
+# save g_td as pdf
+
+# ggplot2::ggsave(
+#   filename = here::here("writing", "Figures", "g_td.pdf"),
+#   plot = g_td,
+#   width = 6.5,
+#   height = 5
+# )
+
+```
+
 ```{r fig-trial-design, fig.cap = "Example trial design"}
-readRDS(here::here("writing/Figures/g_td.rds"))
+#readRDS(here::here("writing/Figures/g_td.rds"))
+
+knitr::include_graphics(
+here::here("writing", "Figures", "g_td.pdf")
+)
 ```
 
 
@@ -1400,5 +1447,14 @@ By combining orthogonalization with flexible final-stage learners, we demonstrat
 
 Across 500 simulated test fields, two approaches consistently dominate: the extended causal forest and the single-orthogonalized neural network. CF is highly robust in small-sample environments, achieving strong accuracy even with training data from just one to five fields. As the number of training fields increases, SO_NN increasingly improves as a result of spatial and agronomic diversity, ultimately delivering the best predictive accuracy of all methods once ten or more fields are available. In contrast, non-orthogonalized baselines require larger samples to become competitive and the doubly-orthogonalized ANN performs poorly in all conditions due to the incompatibility between double-orthogonalization and continuous treatments. Methodologically, our results highlight the importance of aligning the orthogonalization strategy with the structure of the treatment variable in causal ML applications.
 
+
+\newpage
+
+# References
+
+::: {#refs}
+:::
+
+\newpage
 
 
